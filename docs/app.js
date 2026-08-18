@@ -418,12 +418,12 @@ async function send(input) {
   LS.set('chatlog', log);
 
   if (!ONLINE) {
-    addMsg('bot', 'The local engine is not running, so I cannot answer yet.
+    addMsg('bot', `The local engine is not running, so I cannot answer yet.
 
 Start it with:
   py backend/server.py
 
-then click Connect in the sidebar. Your message is saved and will still be here.');
+then click Connect in the sidebar. Your message is saved and will still be here.`);
     return;
   }
 
