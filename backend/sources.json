@@ -11,7 +11,7 @@
       "robots": "Only blocks /wp-admin/, /*.pdf, /resume/* - listings are open",
       "crawl_delay": 5,
       "feed": "per-user personalised RSS plus email alerts (needs a free account)",
-      "priority": 1,
+      "priority": 2,
       "notes": "HIGHEST-VALUE SOURCE. Running 12+ years, 8,000+ members, postings dated within days of check. Covers Alberta properly. Sandra should register for the email alerts herself regardless of what the engine does - it is the closest thing to a single national feed for fire jobs."
     },
     {
@@ -23,9 +23,11 @@
       "allowed": true,
       "robots": "User-agent: * / Crawl-delay: 5 with ZERO Disallow lines - the most permissive source checked",
       "crawl_delay": 5,
-      "feed": "RSS available from search results (/jobsearch/feed/jobSearchRSSfeed...)",
-      "priority": 2,
-      "notes": "NOC 2021 code for firefighters is 42101. Fully permissive robots.txt, so this is the cleanest legal polling target available."
+      "feed": "HTML search only - the RSS endpoint is broken",
+      "priority": 1,
+      "notes": "THE automation backbone. NOC 42101 = Firefighters. Fully permissive robots.txt with a 5s crawl delay. WARNING: the RSS endpoint returns valid Atom but ZERO entries when you pass the same term/fn21 filters that work on the HTML search - the feed ignores query params. Scrape the HTML results, do not build on the RSS. Snapshot 2026-08-18: only 15 firefighter postings Canada-wide, 3 in Alberta, all industrial contractors and zero municipal - independent confirmation that the Alberta municipal window opens Aug 31.",
+      "search_url": "https://www.jobbank.gc.ca/jobsearch/jobsearch?term=firefighter&fn21=42101",
+      "posting_url_pattern": "https://www.jobbank.gc.ca/jobsearch/jobposting/{id}"
     },
     {
       "name": "firefighterrecruitments.ca",
