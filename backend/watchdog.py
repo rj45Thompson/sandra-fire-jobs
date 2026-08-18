@@ -12,6 +12,7 @@ at logon and survives reboots.
 To stop everything deliberately:  py backend/watchdog.py --stop
 """
 
+import http.client
 import os
 import subprocess
 import sys
@@ -58,12 +59,42 @@ def log(msg: str) -> None:
         pass
 
 
+_health_conn: http.client.HTTPConnection | None = None
+
+
 def healthy() -> bool:
+    """
+    Reuses one persistent HTTP connection across polls instead of opening a
+    fresh TCP socket every 10 seconds - a plain urlopen() per call does the
+    latter, and enough connection churn on localhost can occasionally stall
+    a brand-new connection attempt for a few seconds, which reads as "the
+    server died" even though the process is fine. Falls back to a one-shot
+    urlopen if anything about the persistent connection goes wrong, so a
+    genuinely dead server is still detected correctly either way.
+    """
+    global _health_conn
     try:
-        with urllib.request.urlopen(HEALTH, timeout=4) as r:
-            return r.status == 200
-    except (urllib.error.URLError, OSError, TimeoutError):
-        return False
+        if _health_conn is None:
+            _health_conn = http.client.HTTPConnection("127.0.0.1", PORT, timeout=4)
+        _health_conn.request("GET", "/health")
+        r = _health_conn.getresponse()
+        ok = r.status == 200
+        r.read()
+        return ok
+    except (http.client.HTTPException, OSError, TimeoutError):
+        try:
+            if _health_conn:
+                _health_conn.close()
+        except OSError:
+            pass
+        _health_conn = None
+        # one retry on a fresh connection - distinguishes "that connection
+        # went stale" from "the server is actually not answering"
+        try:
+            with urllib.request.urlopen(HEALTH, timeout=4) as r:
+                return r.status == 200
+        except (urllib.error.URLError, OSError, TimeoutError):
+            return False
 
 
 def ollama_up() -> bool:
@@ -125,8 +156,24 @@ def main() -> None:
         if healthy():
             fails = 0
         else:
+            # Restarting kills any in-flight request (a real application
+            # being filled, a chat mid-reply) and is expensive compared to
+            # just checking again - so one failed poll gets a quick second
+            # look before anything disruptive happens. Confirmed tonight:
+            # a single stalled connection attempt can read as "the engine
+            # died" even though the process is fine two seconds later.
+            time.sleep(2)
+            if healthy():
+                continue
             fails += 1
-            log(f"engine not responding ({fails}) - restarting")
+            log(f"engine not responding twice in a row ({fails}) - restarting")
+            global _health_conn
+            try:
+                if _health_conn:
+                    _health_conn.close()
+            except OSError:
+                pass
+            _health_conn = None
             spawn([sys.executable, str(SERVER)], "muster engine")
             time.sleep(GRACE)
             if healthy():

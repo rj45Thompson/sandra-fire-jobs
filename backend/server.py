@@ -517,6 +517,16 @@ def score_posting(title: str, employment_type: str) -> int:
 # ───────────────────────── HTTP layer ──────────────────────────
 class Handler(BaseHTTPRequestHandler):
     server_version = f"Muster/{VERSION}"
+    # HTTP/1.0 (the stdlib default) tears down and re-opens a fresh TCP
+    # connection for every single request. At a health poll every 10s, plus
+    # the front-end's own 20s ping, plus normal use, that is a lot of churn
+    # on localhost - and Windows occasionally stalls a brand-new local
+    # connection attempt for a few seconds under that kind of load, which
+    # looks exactly like "the server died" to a naive timeout even though
+    # the process is fine. HTTP/1.1 lets a client keep one connection open;
+    # _send() already always sets Content-Length, which keep-alive requires
+    # to know where a response ends.
+    protocol_version = "HTTP/1.1"
 
     # -- plumbing --
     def _cors(self, origin: str | None) -> None:
