@@ -114,6 +114,38 @@ def fill_application(url: str, profile: dict, resume_path: str | None,
             except Exception:
                 continue
 
+        # Required checkboxes - almost every real application has at least
+        # one ("I certify this information is accurate", a privacy consent,
+        # a background-check authorization). Never check these ourselves;
+        # that is a factual claim only Sandra can make. But leaving her to
+        # discover an unchecked required box only when Submit silently fails
+        # is a worse outcome than telling her up front what needs a look.
+        unchecked = []
+        for el in page.query_selector_all("input[type=checkbox]"):
+            try:
+                if el.is_checked():
+                    continue
+                required = el.get_attribute("required") is not None or \
+                          el.get_attribute("aria-required") == "true"
+                fid = el.get_attribute("id")
+                label_text = ""
+                if fid:
+                    lab = page.query_selector(f"label[for='{fid}']")
+                    if lab:
+                        label_text = (lab.inner_text() or "").strip()
+                if not label_text:
+                    parent = el.evaluate_handle("el => el.closest('label')")
+                    if parent:
+                        label_text = (parent.as_element().inner_text() or "").strip() if parent.as_element() else ""
+                label_text = re.sub(r"\s+", " ", label_text)[:100]
+                if required or label_text:
+                    unchecked.append(label_text or "(unlabelled checkbox)")
+            except Exception:
+                continue
+        if unchecked:
+            notes.append("Unchecked boxes on this form that may need your attention: "
+                         + "; ".join(unchecked[:5]))
+
         # résumé into any document file input
         if resume_path and Path(resume_path).exists():
             for fi in page.query_selector_all("input[type=file]"):
