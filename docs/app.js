@@ -1,12 +1,12 @@
 /* ===============================================================
-   Brigada - front-end
+   Muster - front-end
    Talks to the local engine over HTTP. Degrades to a local-only
    demo when the engine is not running, so the page is never dead.
    =============================================================== */
 
 const CFG = {
-  api: localStorage.getItem('brigada.api') || 'http://127.0.0.1:8770',
-  token: localStorage.getItem('brigada.token') || '',
+  api: localStorage.getItem('muster.api') || 'http://127.0.0.1:8770',
+  token: localStorage.getItem('muster.token') || '',
 };
 
 let ONLINE = false;
@@ -22,7 +22,7 @@ async function api(path, opts = {}) {
     ...opts,
     headers: {
       'Content-Type': 'application/json',
-      ...(CFG.token ? { 'X-Brigada-Token': CFG.token } : {}),
+      ...(CFG.token ? { 'X-Muster-Token': CFG.token } : {}),
       ...(opts.headers || {}),
     },
   });
@@ -33,14 +33,14 @@ async function api(path, opts = {}) {
 
 /* ---------- local fallback store ---------- */
 const LS = {
-  get: (k, d) => { try { return JSON.parse(localStorage.getItem('brigada.' + k)) ?? d; } catch { return d; } },
-  set: (k, v) => localStorage.setItem('brigada.' + k, JSON.stringify(v)),
+  get: (k, d) => { try { return JSON.parse(localStorage.getItem('muster.' + k)) ?? d; } catch { return d; } },
+  set: (k, v) => localStorage.setItem('muster.' + k, JSON.stringify(v)),
 };
 
 /* ---------- navigation ---------- */
 const TITLES = {
   dash:   ['Dashboard', 'Your search at a glance'],
-  perfil: ['Profile', 'Everything the applications ask for'],
+  profile: ['Profile', 'Everything the applications ask for'],
   docs:   ['Documents', 'Résumé, certifications and expiry dates'],
   jobs:   ['Jobs', 'Every department, watched'],
   apps:   ['Applications', 'Submitted, in review, and replies'],
@@ -56,7 +56,7 @@ $('#nav').addEventListener('click', e => {
 function show(id) {
   $$('#nav button').forEach(x => x.setAttribute('aria-current', String(x.dataset.panel === id)));
   $$('.panel').forEach(p => p.hidden = p.id !== 'p-' + id);
-  const [t, s] = TITLES[id] || ['Brigada', ''];
+  const [t, s] = TITLES[id] || ['Muster', ''];
   $('#page-title').textContent = t;
   $('#page-sub').textContent = s;
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -101,8 +101,8 @@ $('#btn-connect').onclick = async () => {
   if (tok === null) return;
   CFG.api = url.replace(/\/+$/, '');
   CFG.token = tok;
-  localStorage.setItem('brigada.api', CFG.api);
-  localStorage.setItem('brigada.token', CFG.token);
+  localStorage.setItem('muster.api', CFG.api);
+  localStorage.setItem('muster.token', CFG.token);
   if (await ping()) refreshAll();
 };
 

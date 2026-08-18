@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Brigada — Sandra's fire service job engine</title>
+<title>Muster — Sandra's job search</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -11,7 +11,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌺</text></svg>">
 </head>
 <body>
-<div class="picado"></div>
+<div class="cutpaper"></div>
 
 <div class="shell">
 
@@ -21,15 +21,15 @@
       <div class="brand-mark">
         <div class="brand-glyph">🌺</div>
         <div>
-          <h1>Brigada</h1>
-          <small>Fire service</small>
+          <h1>Muster</h1>
+          <small>Job search</small>
         </div>
       </div>
     </div>
 
     <nav class="nav" id="nav">
       <button data-panel="dash"  aria-current="true"><span class="ico">◈</span><span class="lbl">Dashboard</span></button>
-      <button data-panel="perfil"><span class="ico">✦</span><span class="lbl">Profile</span><span class="tag" id="tag-profile">0%</span></button>
+      <button data-panel="profile"><span class="ico">✦</span><span class="lbl">Profile</span><span class="tag" id="tag-profile">0%</span></button>
       <button data-panel="docs"><span class="ico">❋</span><span class="lbl">Documents</span><span class="tag" id="tag-docs">0</span></button>
       <button data-panel="jobs"><span class="ico">◎</span><span class="lbl">Jobs</span><span class="tag" id="tag-jobs">0</span></button>
       <button data-panel="apps"><span class="ico">✈</span><span class="lbl">Applications</span><span class="tag" id="tag-apps">0</span></button>
@@ -61,13 +61,13 @@
 
       <!-- ── DASHBOARD ── -->
       <section class="panel" id="p-dash">
-        <div class="banner rosa" id="setup-banner">
+        <div class="banner pink" id="setup-banner">
           <span class="bi">🌺</span>
           <div>
             <b>Welcome, Sandra</b>
             Start in <b>Profile</b> to enter your details, then <b>Documents</b> for your
-            certifications. Once the local engine is connected, Brigada watches every
-            Alberta fire department for postings that match what you hold.
+            certifications. Once the local engine is connected, Muster watches every
+            employer on your list and scores each posting against what you hold.
           </div>
         </div>
 
@@ -97,14 +97,21 @@
         </div>
 
         <div class="card" style="margin-top:18px">
-          <h3>The blocker — NFPA 1001 live fire</h3>
-          <p class="hint">The one outstanding item standing between Sandra and full certification. Tracked as a first-class blocker because most departments gate on it.</p>
+          <h3>What's blocking you</h3>
+          <p class="hint">Credentials that are part-done. These gate more applications than anything else, so Muster tracks them as first-class items rather than notes.</p>
           <div id="blocker">
             <div class="dl">
               <div class="when soon">OPEN</div>
               <div class="what">
-                <b>Live fire evolutions outstanding</b>
-                <span>Knowledge and skills complete through Lac Ste. Anne County. Needs a host department or academy that accepts partial-completion candidates.</span>
+                <b>NFPA 1001 &mdash; live fire outstanding</b> <span class="chip pink">fire</span>
+                <span>Knowledge and skills complete. Live fire is what seals the certificate, and many paid-on-call departments do not require it at all.</span>
+              </div>
+            </div>
+            <div class="dl">
+              <div class="when soon">OPEN</div>
+              <div class="what">
+                <b>Nursing registration</b> <span class="chip pink">healthcare</span>
+                <span>Unregistered nursing education still opens Health Care Aide and support roles today. It is also worth knowing that Edmonton Fire Rescue accepts nursing registration as a qualifying medical credential &mdash; so the two tracks meet.</span>
               </div>
             </div>
           </div>
@@ -112,7 +119,7 @@
       </section>
 
       <!-- ── PROFILE ── -->
-      <section class="panel" id="p-perfil" hidden>
+      <section class="panel" id="p-profile" hidden>
         <div class="banner">
           <span class="bi">🔒</span>
           <div><b>Stays on this machine</b>
@@ -154,11 +161,74 @@
           </fieldset>
 
           <fieldset>
-            <legend>Current service</legend>
-            <p class="leg-hint">Current department, rank and availability.</p>
+            <legend>What you're looking for</legend>
+            <p class="leg-hint">Tick every track you'd take work in. Muster only watches the ones you pick.</p>
             <div class="row">
-              <div class="field"><label>Current department</label><input type="text" name="current_dept" placeholder="Lac Ste. Anne County"></div>
-              <div class="field"><label>Role / rank</label><input type="text" name="rank" placeholder="Paid-on-call firefighter"></div>
+              <label class="track"><input type="checkbox" name="track_fire" checked> <span>🚒 Fire service</span></label>
+              <label class="track"><input type="checkbox" name="track_health" checked> <span>⚕️ Healthcare</span></label>
+              <label class="track"><input type="checkbox" name="track_any"> <span>✦ Anything else</span></label>
+            </div>
+            <div class="row">
+              <div class="field"><label>Minimum acceptable pay</label><input type="text" name="min_pay" placeholder="e.g. $22/hr, or leave blank"></div>
+              <div class="field"><label>How far will you travel?</label>
+                <select name="commute">
+                  <option>Up to 30 minutes</option><option>Up to 1 hour</option>
+                  <option>Up to 90 minutes</option><option>Any distance / will relocate</option>
+                </select></div>
+              <div class="field"><label>Shift work OK?</label>
+                <select name="shifts"><option>Yes, any shift</option><option>Days only</option><option>No nights</option></select></div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Healthcare and nursing</legend>
+            <p class="leg-hint">Registration status matters more than anything else here — it decides which jobs are open to you today versus after paperwork. Leave blank if this track isn't for you.</p>
+            <div class="row">
+              <div class="field"><label>Nursing education</label>
+                <select name="nursing_education">
+                  <option value="">— none —</option>
+                  <option>Registered Nurse (BN / BScN)</option>
+                  <option>Licensed Practical Nurse (LPN)</option>
+                  <option>Registered Psychiatric Nurse</option>
+                  <option>Nursing diploma</option>
+                  <option>Partial / did not complete</option>
+                  <option>Health Care Aide certificate</option>
+                </select></div>
+              <div class="field"><label>Where did you train?</label><input type="text" name="nursing_country" placeholder="Country / province"></div>
+              <div class="field"><label>Year completed</label><input type="text" name="nursing_year"></div>
+            </div>
+            <div class="row">
+              <div class="field"><label>Registration status</label>
+                <select name="registration_status">
+                  <option value="">— not applicable —</option>
+                  <option>Not registered in Canada</option>
+                  <option>Registration lapsed / inactive</option>
+                  <option>In progress — application submitted</option>
+                  <option>Currently registered</option>
+                </select></div>
+              <div class="field"><label>Credential assessment done?</label>
+                <select name="credential_assessment">
+                  <option value="">— not started —</option>
+                  <option>NNAS in progress</option><option>NNAS complete</option>
+                  <option>IQAS complete</option><option>Not required</option>
+                </select></div>
+              <div class="field"><label>English language test</label>
+                <select name="language_test">
+                  <option value="">— none —</option>
+                  <option>Not required (trained in English)</option>
+                  <option>IELTS / CELBAN passed</option><option>Booked</option>
+                </select></div>
+            </div>
+            <div class="field"><label>Notes on the nursing situation</label>
+              <textarea name="nursing_notes" placeholder="What happened with registration, what's outstanding, what you'd need. The chat uses this to work out your options — plain and specific beats tidy."></textarea></div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Current work</legend>
+            <p class="leg-hint">Where you work now, in any field. Fire, healthcare or otherwise.</p>
+            <div class="row">
+              <div class="field"><label>Current employer</label><input type="text" name="current_dept" placeholder="e.g. Lac Ste. Anne County"></div>
+              <div class="field"><label>Role / title</label><input type="text" name="rank" placeholder="e.g. Paid-on-call firefighter"></div>
             </div>
             <div class="row">
               <div class="field"><label>Started</label><input type="date" name="service_start"></div>
@@ -169,13 +239,13 @@
                 </select></div>
               <div class="field"><label>Earliest start</label><input type="date" name="available_from"></div>
             </div>
-            <div class="field"><label>Calls attended / notable incidents</label>
-              <textarea name="incidents" placeholder="Structure fires, MVIs, medical assists, wildland interface — rough counts and anything notable."></textarea></div>
+            <div class="field"><label>What you actually do &mdash; duties, calls, responsibilities</label>
+              <textarea name="incidents" placeholder="For fire: structure fires, MVIs, medical assists. For care work: residents supported, shifts, duties. Rough numbers are fine."></textarea></div>
           </fieldset>
 
           <fieldset>
-            <legend>Licences and fitness</legend>
-            <p class="leg-hint">Departments screen on these before they read anything else.</p>
+            <legend>Licences, checks and fitness</legend>
+            <p class="leg-hint">Employers screen on these before they read anything else. Healthcare and fire both gate on the record checks.</p>
             <div class="row">
               <div class="field"><label>Driver's licence class</label>
                 <select name="licence_class">
@@ -250,7 +320,7 @@
         <div class="grid g2" style="margin-bottom:20px">
           <div class="card">
             <h3>Résumé</h3>
-            <p class="hint">Upload once. Brigada reuses it and tailors the letter per department.</p>
+            <p class="hint">Upload once. Muster reuses it and tailors the letter per department.</p>
             <div class="drop" id="drop-resume">
               <div class="big">📄</div>
               <b>Drop résumé here</b> or click to browse
@@ -275,7 +345,7 @@
 
         <div class="card">
           <h3>Certifications</h3>
-          <p class="hint">Expiry tracking — Brigada warns before anything lapses, because a lapsed cert silently disqualifies an application.</p>
+          <p class="hint">Expiry tracking — Muster warns before anything lapses, because a lapsed cert silently disqualifies an application.</p>
           <div class="row" style="align-items:end;margin-bottom:16px">
             <div class="field" style="margin:0"><label>Certification</label>
               <select id="cert-name">
@@ -285,7 +355,19 @@
                 <option>Emergency Medical Responder (EMR)</option><option>Primary Care Paramedic (PCP)</option>
                 <option>Standard First Aid + CPR-C</option><option>ICS 100</option><option>ICS 200</option>
                 <option>S-100 Wildland</option><option>S-185 Wildland</option>
-                <option>H2S Alive</option><option>Confined Space</option><option>Other</option>
+                <option>H2S Alive</option><option>Confined Space</option>
+                <option disabled>&mdash; healthcare &mdash;</option>
+                <option>Health Care Aide certificate</option>
+                <option>Basic Life Support (BLS)</option>
+                <option>Nursing degree / diploma</option>
+                <option>LPN registration (CLPNA)</option>
+                <option>RN registration (CRNA)</option>
+                <option>Medication Aide</option>
+                <option>Non-Violent Crisis Intervention</option>
+                <option>WHMIS</option>
+                <option disabled>&mdash; general &mdash;</option>
+                <option>Food Safety</option><option>Class 4 licence</option>
+                <option>Security licence</option><option>Other</option>
               </select></div>
             <div class="field" style="margin:0"><label>Status</label>
               <select id="cert-status"><option>Complete</option><option>In progress</option><option>Partial</option><option>Expired</option></select></div>
@@ -302,9 +384,9 @@
       <section class="panel" id="p-jobs" hidden>
         <div class="banner">
           <span class="bi">◎</span>
-          <div><b>Every department, watched</b>
-          Municipal, industrial and wildland employers across Alberta and beyond.
-          Brigada checks each source for new postings and scores them against what Sandra holds.</div>
+          <div><b>Every employer, watched</b>
+          Fire services, healthcare, and general employers across Alberta and beyond.
+          Muster checks each source for new postings and scores them against what you hold.</div>
         </div>
         <div style="display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap">
           <button class="btn" id="btn-scan2">Scan now</button>
@@ -314,11 +396,11 @@
         <div class="tablewrap">
           <table>
             <thead><tr>
-              <th>Employer</th><th>Role</th><th>Type</th><th>City</th>
+              <th>Employer</th><th>Role</th><th>Track</th><th>Type</th><th>City</th>
               <th>Closes</th><th>Match</th><th>Portal</th><th></th>
             </tr></thead>
             <tbody id="jobs-body">
-              <tr><td colspan="8"><div class="empty"><div class="big">◎</div>
+              <tr><td colspan="9"><div class="empty"><div class="big">◎</div>
                 No postings yet.<br><small>Connect the engine, then load employers and scan.</small></div></td></tr>
             </tbody>
           </table>
@@ -330,7 +412,7 @@
         <div class="banner">
           <span class="bi">✈</span>
           <div><b>Nothing submits without review</b>
-          Brigada fills the forms and queues them here. You read it, then you send it.
+          Muster fills the forms and queues them here. You read it, then you send it.
           Fire departments talk to each other — a sloppy application is remembered.</div>
         </div>
         <div class="tablewrap">
@@ -351,12 +433,14 @@
       <section class="panel" id="p-chat" hidden>
         <div class="chat">
           <div class="msgs" id="msgs">
-            <div class="msg sys">Brigada runs on your machine. This conversation is stored locally.</div>
-            <div class="msg bot">Hi Sandra. I'm here to help you land a fire service job.
+            <div class="msg sys">Muster runs on your machine. This conversation is stored locally.</div>
+            <div class="msg bot">Hi Sandra. I'm here to help you find work.
 
-I can look up which departments are hiring, tell you what each one requires, draft a cover letter in your voice, and keep track of every application and reply.
+Fire service, healthcare, or anything else — I can look up who is hiring, tell you what each employer requires, draft a cover letter in your voice, and keep track of every application and reply.
 
-A good place to start: tell me which departments you've already applied to, or ask me what's open right now.</div>
+If your nursing registration is the sticking point, ask me about it. There is work open to you without it, and there is a route through it, and they are different conversations.
+
+A good place to start: tell me what kind of work you want, or ask me what is open right now.</div>
           </div>
           <div class="composer">
             <textarea id="chat-input" placeholder="Ask about departments, requirements, deadlines, or ask for a cover letter…" rows="1"></textarea>

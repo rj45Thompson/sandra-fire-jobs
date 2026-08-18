@@ -1,4 +1,4 @@
-# Brigada
+# Muster
 
 A local-first job engine for the fire service, built for one firefighter in
 Alberta who was tired of applications disappearing into portals.

@@ -1,4 +1,4 @@
-# Brigada — Sandra's firefighter job engine
+# Muster — Sandra's firefighter job engine
 
 A local-first application system for firefighting work in Alberta and beyond.
 Pink, modern, and built to actually reach every department that hires.

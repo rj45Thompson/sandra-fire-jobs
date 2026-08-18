@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Brigada - local engine.
+Muster - local engine.
 
 Runs on Sandra's machine. Holds the profile, documents and credentials;
 the public GitHub Pages front-end talks to it over HTTP on localhost.
@@ -35,7 +35,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 DOCS_DIR = DATA / "documents"
 RESUME_DIR = DATA / "resumes"
-DB_PATH = DATA / "brigada.db"
+DB_PATH = DATA / "muster.db"
 
 for d in (DATA, DOCS_DIR, RESUME_DIR):
     d.mkdir(parents=True, exist_ok=True)
@@ -307,7 +307,7 @@ def score_posting(title: str, employment_type: str) -> int:
 
 # ───────────────────────── HTTP layer ──────────────────────────
 class Handler(BaseHTTPRequestHandler):
-    server_version = f"Brigada/{VERSION}"
+    server_version = f"Muster/{VERSION}"
 
     # -- plumbing --
     def _cors(self, origin: str | None) -> None:
@@ -317,7 +317,7 @@ class Handler(BaseHTTPRequestHandler):
                        or origin.endswith(".github.io")):
             allow = origin
         self.send_header("Access-Control-Allow-Origin", allow)
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Brigada-Token")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Muster-Token")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 
     def _send(self, obj, code=200) -> None:
@@ -341,7 +341,7 @@ class Handler(BaseHTTPRequestHandler):
     def _authed(self) -> bool:
         if not TOKEN:
             return True   # no token configured = local dev, allow
-        return self.headers.get("X-Brigada-Token") == TOKEN
+        return self.headers.get("X-Muster-Token") == TOKEN
 
     def log_message(self, fmt, *args):
         print(f"  {self.command} {self.path}")
@@ -518,7 +518,7 @@ class Handler(BaseHTTPRequestHandler):
             checked += 1
             try:
                 req = urllib.request.Request(
-                    url, headers={"User-Agent": "Mozilla/5.0 (Brigada job watcher)"})
+                    url, headers={"User-Agent": "Mozilla/5.0 (Muster job watcher)"})
                 with urllib.request.urlopen(req, timeout=12) as resp:
                     html = resp.read(400_000).decode("utf-8", "ignore")
             except (urllib.error.URLError, OSError, TimeoutError):
@@ -555,12 +555,53 @@ class Handler(BaseHTTPRequestHandler):
             WHERE p.active=1 ORDER BY p.match DESC LIMIT 12""")]
 
         system = (
-            "You are Brigada, a calm and practical assistant helping Sandra Ayany "
-            "find work in the fire service in Alberta, Canada. She is a serving "
-            "paid-on-call firefighter. Be concrete and encouraging without being "
-            "saccharine. Never invent a posting, a deadline, or a requirement - if "
-            "you do not know, say so and suggest how to find out.\n\n"
-            f"Her profile: {json.dumps(prof, default=str)[:1500]}\n"
+            "You are Muster, a calm and practical assistant helping Sandra Ayany "
+            "find work in Alberta, Canada. Be concrete and encouraging without "
+            "being saccharine. Never invent a posting, a deadline, or a "
+            "requirement - if you do not know, say so and say how to find out.\n\n"
+
+            "She has two tracks and may take work in either, or in anything else:\n\n"
+
+            "FIRE SERVICE. She is a serving paid-on-call firefighter with Lac Ste. "
+            "Anne County. Her NFPA 1001 is complete except live-fire evolutions, "
+            "which is what 'seals' the certificate through IFSAC or Pro Board. This "
+            "matters less than people assume: most paid-on-call departments do not "
+            "require NFPA at all and train recruits themselves. The real gate on "
+            "paid-on-call roles is usually the residency radius around a hall, not "
+            "the certificate. Her own county provides Firefighter I and II free to "
+            "members - contact R. Schroeder, rschroeder@lsac.ca, 780-785-3411. "
+            "Alberta's certifying body is Municipal Affairs: ma.certexam@gov.ab.ca, "
+            "1-866-421-6929.\n\n"
+
+            "HEALTHCARE. She has nursing education but is not registered in Canada. "
+            "Two separate conversations live here and you should not blur them:\n"
+            "  (a) Work open to her TODAY without registration - Health Care Aide, "
+            "continuing care assistant, home care, personal care attendant, unit "
+            "clerk, medical office assistant, care aide with private operators and "
+            "staffing agencies. Unregistered nursing education is a genuine asset "
+            "for these, not a deficiency.\n"
+            "  (b) The route THROUGH registration - in Alberta, CRNA for registered "
+            "nurses and CLPNA for licensed practical nurses. Internationally trained "
+            "applicants normally go through NNAS for credential assessment, and may "
+            "need an English test such as CELBAN or IELTS. Do not guess at her "
+            "specific pathway; ask where and when she trained, and what happened "
+            "with registration, then reason from that.\n\n"
+
+            "THE TWO TRACKS MEET. Edmonton Fire Rescue requires ONE qualifying "
+            "medical credential at application, and its published list includes "
+            "nursing registration (BN with CRNA, or LPN with CLPNA) alongside EMR "
+            "and paramedic registration. So nursing registration would itself open "
+            "the Edmonton firefighter route. Several other departments - St. Albert, "
+            "Spruce Grove, Strathcona - require paramedic registration for their "
+            "full-time roles, so a medical credential is the common key to career "
+            "fire jobs. Raise this when it is relevant, but do not lecture about it "
+            "every message.\n\n"
+
+            "Applications close on fixed dates and Alberta municipal hiring clusters "
+            "in the fall, so timing matters more than volume. If she asks what to do "
+            "next, prefer the specific and immediate over the general.\n\n"
+
+            f"Her profile: {json.dumps(prof, default=str)[:1800]}\n"
             f"Her certifications: {', '.join(certs) or 'none recorded yet'}\n"
             f"Currently tracked openings: {'; '.join(open_jobs) or 'none scanned yet'}"
         )
@@ -623,7 +664,7 @@ def main() -> None:
     tokset = TOKEN and TOKEN != "change-me-to-something-random"
     banner = f"""
   +----------------------------------------------+
-  |   BRIGADA  ::  local engine v{VERSION}            |
+  |   MUSTER  ::  local engine v{VERSION}            |
   +----------------------------------------------+
 
    API      http://127.0.0.1:{PORT}
