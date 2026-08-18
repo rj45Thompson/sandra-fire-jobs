@@ -36,6 +36,7 @@ DATA = ROOT / "data"
 DOCS_DIR = DATA / "documents"
 RESUME_DIR = DATA / "resumes"
 DB_PATH = DATA / "muster.db"
+WEB_DIR = ROOT / "docs"
 
 for d in (DATA, DOCS_DIR, RESUME_DIR):
     d.mkdir(parents=True, exist_ok=True)
@@ -319,6 +320,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", allow)
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Muster-Token")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
 
     def _send(self, obj, code=200) -> None:
         body = json.dumps(obj, default=str).encode()
@@ -352,8 +354,40 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     # -- routes --
+    # -- static front-end --
+    # Serving docs/ from this same origin is what makes the app reliable.
+    # A public HTTPS page calling http://127.0.0.1 gets blocked by extensions,
+    # Private Network Access rules and mixed-content policy; same-origin has
+    # none of those problems.
+    MIME = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+            ".css": "text/css; charset=utf-8", ".json": "application/json",
+            ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon"}
+
+    def _serve_static(self, path: str) -> bool:
+        rel = "index.html" if path in ("/", "") else path.lstrip("/")
+        target = (WEB_DIR / rel).resolve()
+        try:
+            target.relative_to(WEB_DIR.resolve())   # no path traversal
+        except ValueError:
+            return False
+        if not target.is_file():
+            return False
+        body = target.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", self.MIME.get(target.suffix, "application/octet-stream"))
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(body)
+        return True
+
     def do_GET(self):
         p = self.path.split("?")[0]
+        if p == "/" or not p.startswith(("/health", "/profile", "/certs", "/employers",
+                                         "/postings", "/applications", "/stats", "/scan",
+                                         "/chat", "/upload")):
+            if self._serve_static(p):
+                return
         if p == "/health":
             return self._send({"ok": True, "version": VERSION,
                                "gmail": bool(ENV.get("GMAIL_APP_PASSWORD")),
@@ -608,8 +642,9 @@ class Handler(BaseHTTPRequestHandler):
 
         provider = ENV.get("CHAT_PROVIDER", "ollama").lower()
         try:
-            reply = (_chat_anthropic if provider == "anthropic" else _chat_ollama)(
-                system, history, message)
+            fn = {"anthropic": _chat_anthropic,
+                  "claude-cli": _chat_claude_cli}.get(provider, _chat_ollama)
+            reply = fn(system, history, message)
         except Exception as e:
             reply = (f"I could not reach the {provider} backend ({e}).\n\n"
                      "If you are using Ollama, check it is running:  ollama serve\n"
@@ -637,6 +672,39 @@ def _chat_ollama(system: str, history: list, message: str) -> str:
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=180) as r:
         return json.loads(r.read())["message"]["content"]
+
+
+def _chat_claude_cli(system: str, history: list, message: str) -> str:
+    """
+    Use the Claude Code CLI already installed and signed in on this machine.
+    No API key needed - it rides the existing subscription.
+    """
+    import subprocess
+    nl = chr(10)
+    convo = nl.join(
+        f"{'Sandra' if h.get('role') == 'user' else 'You'}: {h.get('text','')}"
+        for h in history[-10:])
+    # The briefing goes in as a SYSTEM prompt, not mixed into the user turn -
+    # otherwise the model reads it as instructions about a third party and
+    # greets you instead of answering the question.
+    sys_prompt = (
+        system + nl + nl +
+        "You are talking directly to Sandra herself. Address her as 'you'. "
+        "Answer the question she actually asked, immediately, in plain prose. "
+        "No greeting, no menu of options, no offer to help - just the answer."
+    )
+    user = (f"Earlier in our conversation:{nl}{convo}{nl}{nl}{message}"
+            if convo else message)
+    exe = ENV.get("CLAUDE_CLI", "claude")
+    proc = subprocess.run(
+        [exe, "-p", user, "--append-system-prompt", sys_prompt,
+         "--output-format", "text"],
+        capture_output=True, text=True, timeout=240,
+        shell=(os.name == "nt"), encoding="utf-8", errors="replace")
+    out = (proc.stdout or "").strip()
+    if not out:
+        raise RuntimeError((proc.stderr or "claude cli returned nothing")[:200])
+    return out
 
 
 def _chat_anthropic(system: str, history: list, message: str) -> str:

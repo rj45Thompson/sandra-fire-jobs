@@ -31,3 +31,7 @@ node_modules/
 
 data/server.out
 data/server.err
+
+run_hidden.vbs
+data/watchdog.log
+data/.stop
