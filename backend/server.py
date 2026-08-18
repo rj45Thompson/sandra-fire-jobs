@@ -16,6 +16,7 @@ import base64
 import json
 import os
 import re
+import shutil
 import sqlite3
 import sys
 import threading
@@ -878,7 +879,7 @@ class Handler(BaseHTTPRequestHandler):
         return {"ok": True, "checked": checked, "new": found,
                 "skipped_by_robots": skipped, "employers": total, "custom_sources": custom}
 
-    EDITABLE = {"styles.css", "index.html"}
+    EDITABLE = {"styles.css", "index.html", "app.js"}
 
     def _sources_chat(self, message: str) -> dict:
         """
@@ -984,7 +985,14 @@ class Handler(BaseHTTPRequestHandler):
         return {"reply": reply, "saved": saved}
 
     def _apply_start(self, url: str) -> dict:
-        """Open the posting and fill it in a real browser, ready for review."""
+        """
+        Open the posting and fill it in a real browser, ready for review.
+
+        Every attempt is recorded, including the ones that did not go
+        cleanly - a hard failure or a login/CAPTCHA wall - so nothing just
+        vanishes. Sandra sees a 'needs attention' row with the reason
+        instead of silence.
+        """
         if not url.startswith("http"):
             return {"error": "That does not look like a web address."}
         import applier
@@ -995,16 +1003,40 @@ class Handler(BaseHTTPRequestHandler):
         ).fetchone()
         resume_path = resume["path"] if resume else None
         headless = ENV.get("HEADLESS", "false").lower() == "true"
+
         try:
             rep = applier.fill_application(url, profile, resume_path,
                                            channel=ENV.get("BROWSER_CHANNEL", "msedge"),
                                            headless=headless)
         except Exception as e:
-            return {"error": f"Could not run the browser: {e}"}
-        if rep.get("ok"):
+            rep = {"ok": False, "error": f"Could not run the browser: {e}",
+                   "filled": [], "notes": []}
+
+        pid = db().execute(
+            "INSERT INTO postings (title,url,active) VALUES (?,?,0) "
+            "ON CONFLICT(url) DO NOTHING", (url[:120], url)).lastrowid
+        if not pid:
+            row = db().execute("SELECT id FROM postings WHERE url=?", (url,)).fetchone()
+            pid = row["id"] if row else None
+
+        if not rep.get("ok"):
+            reason = rep.get("error", "Unknown error")
             db().execute(
-                "INSERT INTO applications (posting_id,status,notes) VALUES (NULL,'review',?)",
-                (f"Auto-filled {url} - {len(rep.get('filled', []))} fields",))
+                "INSERT INTO applications (posting_id,status,notes) VALUES (?,'failed',?)",
+                (pid, f"Could not apply at {url} - {reason}"))
+            db().commit()
+            log_event(f"Application FAILED at {url[:60]} - needs your attention")
+        elif rep.get("notes"):
+            reason = " ".join(rep["notes"])
+            db().execute(
+                "INSERT INTO applications (posting_id,status,notes) VALUES (?,'needs_you',?)",
+                (pid, f"{url} - {reason}"))
+            db().commit()
+            log_event(f"Application at {url[:60]} needs you - {reason[:60]}")
+        else:
+            db().execute(
+                "INSERT INTO applications (posting_id,status,notes) VALUES (?,'review',?)",
+                (pid, f"Auto-filled {url} - {len(rep.get('filled', []))} fields"))
             db().commit()
             log_event(f"Filled an application at {url[:60]} - review it")
         return rep
@@ -1041,14 +1073,28 @@ class Handler(BaseHTTPRequestHandler):
         if not request.strip():
             return {"error": "Say what you would like changed."}
 
-        # Wording changes touch the markup; everything about how it LOOKS is CSS.
-        # "make the buttons rounder" is styling, not copy - so match on the verb,
-        # not on the noun. Getting this wrong rewrote the wrong file.
+        # Three kinds of request, three files. Check BEHAVIOUR first - "bug",
+        # "not working", "should update" - because a broken bug report is the
+        # most costly thing to misroute (it becomes a doomed CSS rewrite that
+        # can only fail). Wording is next, by quoted text or verbs of speech.
+        # Everything else - colour, size, spacing, roundness, theme - is CSS.
+        behaviour = re.search(
+            r"\b(bug|broken|doesn'?t work|does not work|not working|isn'?t "
+            r"updat|not updat|fix|glitch|error|wrong|stuck|freeze|frozen|"
+            r"crash|hang|button (does|doesn)|click|should (update|refresh|"
+            r"show|save|clear))\b", request, re.I)
+        quoted = re.search(r'["“‘\']([^"”’\']{4,})["”’\']', request)
         wording = re.search(
-            r"\b(wording|reword|rename|renames?|caption|spelling|typo|"
-            r"call it|greeting|change the (text|title|words)|"
-            r"label text|message text)\b", request, re.I)
-        target = "index.html" if wording else "styles.css"
+            r"\b(say|says|saying|word|words|wording|reword|rename|renamed|"
+            r"heading|headline|title|caption|label|spelling|typo|call it|"
+            r"greeting|message|sentence|phrase|text)\b", request, re.I)
+
+        if behaviour:
+            target = "app.js"
+        elif quoted or wording:
+            target = "index.html"
+        else:
+            target = "styles.css"
         src = WEB_DIR / target
         current = src.read_text(encoding="utf-8")
 
@@ -1056,6 +1102,18 @@ class Handler(BaseHTTPRequestHandler):
         backup_dir.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         (backup_dir / f"{stamp}-{target}").write_text(current, encoding="utf-8")
+
+        js_rules = (
+            "- This is a browser JavaScript file, not a code-editing session - "
+            "there is no linter and no test run before it ships, so it must be "
+            "correct on the first try.\n"
+            "- Keep every function name, every element id string, and the "
+            "overall structure. Change only what the request asks for.\n"
+            "- Every multi-line template literal must use backticks (`), never "
+            "a single- or double-quoted string - a plain string containing a "
+            "real newline is a syntax error that breaks the entire file, "
+            "silently, with no visible sign on the page itself.\n"
+        ) if target == "app.js" else ""
 
         brief = (
             "You are editing the front-end of a personal job-search app called "
@@ -1067,6 +1125,7 @@ class Handler(BaseHTTPRequestHandler):
             "- Keep every id, class name and data attribute that already exists, "
             "or the app stops working.\n"
             "- Keep it accessible and readable in both light and dark mode.\n"
+            + js_rules +
             "- If the request is vague, make a tasteful choice rather than asking."
         )
         try:
@@ -1074,18 +1133,106 @@ class Handler(BaseHTTPRequestHandler):
         except (RuntimeError, OSError) as e:
             return {"error": f"Could not reach the assistant: {e}"}
 
-        new = re.sub(r"^```[a-zA-Z]*\n|```\s*$", "", new.strip())
-
-        low = new.lower()
-        if target == "index.html":
-            ok = "<html" in low and "</html>" in low and 'id="nav"' in low
+        new = new.strip()
+        # A fenced block, if there is one, is the most reliable signal - use
+        # its contents and discard anything outside it (narration before or
+        # after the fence).
+        fence = re.search(r"```[a-zA-Z]*\n(.*?)```", new, re.S)
+        if fence:
+            new = fence.group(1).strip()
         else:
-            ok = new.count("{") > 20 and "--pink" in new
-        if not ok or len(new) < 800:
-            return {"error": f"The rewrite of {target} came back looking incomplete "
-                             f"({len(new)} characters), so nothing was changed. "
-                             "Nothing is broken - try asking again, or be more "
-                             "specific about what you want."}
+            # No fence: the model sometimes narrates first ("I've added a
+            # handler... Here's the complete file:") with no code marker at
+            # all, which otherwise ships a JS syntax error hidden inside an
+            # English sentence. Cut everything before the first line that
+            # actually looks like the start of this file type.
+            starts = {
+                "app.js": r"^\s*(/\*|//|'use strict'|\"use strict\"|const\b|let\b|"
+                          r"var\b|function\b|async function\b|\(function|\(async)",
+                "styles.css": r"^\s*(/\*|:root|\.[\w-]+\s*\{|@media|\*\s*\{)",
+                "index.html": r"^\s*(<!doctype|<html)",
+            }
+            m = re.search(starts.get(target, r"^"), new, re.I | re.M)
+            if m and m.start() > 0:
+                new = new[m.start():].strip()
+
+        # Structural guard. A rewrite that quietly drops half the page would
+        # otherwise sail through a keyword check, so compare against what is
+        # there now: every id and every CSS variable must survive, and the file
+        # must not shrink dramatically.
+        def ids(txt):
+            return set(re.findall(r'id="([\w-]+)"', txt))
+
+        problems = []
+        if len(new) < len(current) * 0.75:
+            problems.append(f"it shrank from {len(current)} to {len(new)} characters")
+
+        if target == "index.html":
+            lost = ids(current) - ids(new)
+            if lost:
+                problems.append("it dropped " + ", ".join(sorted(lost)[:6]))
+            for needed in ("<html", "</html>", "app.js", "styles.css"):
+                if needed not in new.lower():
+                    problems.append(f"no {needed}")
+
+        elif target == "app.js":
+            # A syntax check is the only guard that actually matters here - this
+            # exact class of bug (a template literal saved as a plain quoted
+            # string, collapsing its escaped newlines into real ones) has
+            # silently broken every event handler on this page before, with
+            # nothing visibly wrong until a button was clicked.
+            import subprocess
+            import tempfile as _tf
+            node = shutil.which("node")
+            if node:
+                with _tf.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                            encoding="utf-8") as f:
+                    f.write(new)
+                    check_path = f.name
+                try:
+                    r = subprocess.run([node, "--check", check_path],
+                                       capture_output=True, text=True, timeout=15)
+                    if r.returncode != 0:
+                        # node's stderr ends with a "Node.js vX.Y.Z" trailer -
+                        # the real message is the line naming the error itself.
+                        err_lines = r.stderr.strip().splitlines()
+                        err_line = next((ln for ln in err_lines if "Error" in ln),
+                                        err_lines[0] if err_lines else "unknown error")
+                        problems.append("it does not parse as JavaScript: "
+                                        + err_line.strip()[:160])
+                finally:
+                    try:
+                        os.unlink(check_path)
+                    except OSError:
+                        pass
+            else:
+                # No node on PATH - fall back to the balance check that has
+                # caught this exact bug before.
+                if new.count("try") - new.count("catch") - new.count("finally") > 2:
+                    problems.append("try/catch looks unbalanced")
+
+            lost_fns = set(re.findall(r"function\s+(\w+)\s*\(", current)) - \
+                       set(re.findall(r"function\s+(\w+)\s*\(", new))
+            if lost_fns:
+                problems.append("it dropped functions: " + ", ".join(sorted(lost_fns)[:5]))
+            lost_ids = set(re.findall(r"""['"]#([\w-]+)['"]""", current)) - \
+                       set(re.findall(r"""['"]#([\w-]+)['"]""", new))
+            if lost_ids:
+                problems.append("it stopped referencing: " + ", ".join(f"#{i}" for i in sorted(lost_ids)[:5]))
+
+        else:
+            lost_vars = set(re.findall(r"(--[\w-]+):", current)) - \
+                        set(re.findall(r"(--[\w-]+):", new))
+            if lost_vars:
+                problems.append("it dropped colours " + ", ".join(sorted(lost_vars)[:5]))
+            if new.count("{") < current.count("{") * 0.8:
+                problems.append("it dropped style rules")
+
+        if problems:
+            return {"error": "I did not apply that - the rewrite came back damaged: "
+                             + "; ".join(problems) +
+                             ". Nothing was changed. Try asking again, or more "
+                             "specifically."}
 
         src.write_text(new, encoding="utf-8")
         log_event(f"Front-end upgraded: {request[:70]}")

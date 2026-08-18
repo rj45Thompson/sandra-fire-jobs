@@ -551,28 +551,14 @@ async function loadApps() {
       body.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="big">✈</div>No applications yet.</div></td></tr>`;
       return;
     }
-    const STATUS_CHIP = { submitted: 'ok', review: 'warn', needs_you: 'warn', failed: 'bad', replied: 'ok', closed: '' };
-    const STATUS_LABEL = { needs_you: 'needs you', review: 'ready to review', failed: 'failed', submitted: 'submitted', replied: 'replied', closed: 'closed' };
     body.innerHTML = apps.map(a => `<tr>
       <td><b>${esc(a.employer)}</b></td>
       <td class="wrap-cell">${esc(a.title)}</td>
-      <td><span class="chip ${STATUS_CHIP[a.status] || ''}">${esc(STATUS_LABEL[a.status] || a.status)}</span></td>
+      <td><span class="chip ${a.status === 'submitted' ? 'ok' : a.status === 'review' ? 'warn' : ''}">${esc(a.status)}</span></td>
       <td>${esc(a.submitted_at || '—')}</td>
-      <td class="wrap-cell">${a.status === 'failed' || a.status === 'needs_you' ? esc(a.notes || 'See details') : esc(a.last_reply || '—')}</td>
+      <td class="wrap-cell">${esc(a.last_reply || '—')}</td>
       <td><button class="btn ghost" style="padding:5px 13px;font-size:12.5px" data-app="${a.id}">View</button></td>
     </tr>`).join('');
-    $$('[data-app]', body).forEach(b => b.onclick = () => {
-      const a = apps.find(x => String(x.id) === b.dataset.app);
-      if (!a) return;
-      alert(`Employer: ${a.employer || '—'}\n` +
-            `Role: ${a.title || '—'}\n` +
-            `Status: ${STATUS_LABEL[a.status] || a.status || '—'}` +
-            (a.notes ? `\n\n${a.notes}` : ''));
-    });
-    const needsAttention = apps.filter(a => a.status === 'failed' || a.status === 'needs_you').length;
-    const na = $('#s-needs-attention'), tile = $('#attn-tile');
-    if (na) na.textContent = needsAttention;
-    if (tile) tile.style.display = needsAttention ? '' : 'none';
   } catch (e) { console.warn(e); }
 }
 
@@ -753,49 +739,6 @@ async function refreshInbox() {
 }
 if ($('#btn-inbox-refresh')) $('#btn-inbox-refresh').onclick = refreshInbox;
 
-/* ---------- talk: voice input on every composer ---------- */
-// The browser's own speech recognition - no server round-trip, no key needed.
-// Chrome and Edge support it; other browsers just never see the button.
-function setupTalkButtons() {
-  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!Recognition) return;   // not supported here - composers work fine without it
-
-  $$('.composer').forEach(composer => {
-    const textarea = composer.querySelector('textarea');
-    const sendBtn = composer.querySelector('button');
-    if (!textarea || composer.querySelector('.btn-talk')) return;
-
-    const mic = document.createElement('button');
-    mic.type = 'button';
-    mic.className = 'btn quiet btn-talk';
-    mic.title = 'Talk instead of typing';
-    mic.textContent = '🎤';
-    mic.style.flex = 'none';
-    composer.insertBefore(mic, sendBtn);
-
-    let rec = null, listening = false;
-    mic.onclick = () => {
-      if (listening) { rec && rec.stop(); return; }
-      rec = new Recognition();
-      rec.lang = 'en-CA';
-      rec.interimResults = true;
-      rec.continuous = false;
-      const base = textarea.value ? textarea.value + ' ' : '';
-
-      rec.onstart = () => { listening = true; mic.classList.add('talking'); mic.textContent = '●'; };
-      rec.onresult = e => {
-        let text = '';
-        for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
-        textarea.value = base + text;
-        textarea.dispatchEvent(new Event('input', { bubbles: true }));
-      };
-      rec.onerror = () => { listening = false; mic.classList.remove('talking'); mic.textContent = '🎤'; };
-      rec.onend = () => { listening = false; mic.classList.remove('talking'); mic.textContent = '🎤'; };
-      try { rec.start(); } catch { /* already running elsewhere - ignore */ }
-    };
-  });
-}
-
 /* ---------- boot ---------- */
 async function refreshAll() {
   await Promise.all([loadStats(), loadJobs(), loadApps(), loadSources(), loadCerts(), emailStatus(), loadGaps()]);
@@ -807,7 +750,6 @@ async function refreshAll() {
   renderFiles('#doc-list', 'documents');
   restoreChat();
   loadSources();
-  setupTalkButtons();
   if (await ping()) refreshAll();
   setInterval(ping, 20000);
 })();

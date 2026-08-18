@@ -205,7 +205,6 @@ a{color:var(--pink-deep)}
 .stat.p2{background:linear-gradient(140deg,var(--clay),var(--clay-deep))}
 .stat.p3{background:linear-gradient(140deg,var(--marigold),#D98A18)}
 .stat.p4{background:linear-gradient(140deg,var(--teal),var(--teal-deep))}
-.stat.p5{background:linear-gradient(140deg,var(--bad),#A83232)}
 
 /* forms */
 .field{margin-bottom:15px}
@@ -276,9 +275,6 @@ td.wrap-cell{white-space:normal; min-width:210px}
 .msg.sys{align-self:center; background:var(--marigold-soft); color:#96631A;
          font-size:12.5px; border-radius:99px; padding:6px 15px; max-width:none}
 .composer{display:flex; gap:11px; align-items:flex-end; padding-top:15px; border-top:1px solid var(--line)}
-.btn-talk{font-size:16px; padding:10px 13px}
-.btn-talk.talking{background:var(--pink); color:#fff; animation:talkpulse 1.1s ease-in-out infinite}
-@keyframes talkpulse{50%{box-shadow:0 0 0 8px rgba(255,46,136,0)}}
 .composer textarea{min-height:48px; max-height:190px; border-radius:var(--r-lg)}
 
 /* deadline list */
