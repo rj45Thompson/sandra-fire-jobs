@@ -24,6 +24,14 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// server timestamps are stored UTC (SQLite CURRENT_TIMESTAMP); render in
+// whatever zone the browser is actually in, not the raw UTC string.
+const fmtTime = s => {
+  if (!s) return s;
+  const d = new Date(String(s).replace(' ', 'T') + 'Z');
+  return isNaN(d) ? s : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+};
+
 async function api(path, opts = {}) {
   const r = await fetch(CFG.api + path, {
     ...opts,
@@ -557,7 +565,7 @@ async function loadApps() {
       <td><b>${esc(a.employer)}</b></td>
       <td class="wrap-cell">${esc(a.title)}</td>
       <td><span class="chip ${STATUS_CHIP[a.status] || ''}">${esc(STATUS_LABEL[a.status] || a.status)}</span></td>
-      <td>${esc(a.submitted_at || '—')}</td>
+      <td>${esc(fmtTime(a.submitted_at) || '—')}</td>
       <td class="wrap-cell">${a.status === 'failed' || a.status === 'needs_you' ? esc(a.notes || 'See details') : esc(a.last_reply || '—')}</td>
       <td><button class="btn ghost" style="padding:5px 13px;font-size:12.5px" data-app="${a.id}">View</button></td>
     </tr>`).join('');
@@ -593,7 +601,7 @@ async function loadStats() {
     }
     if (s.activity?.length) {
       $('#activity').innerHTML = s.activity.map(a => `<div class="dl">
-        <div class="what"><b>${esc(a.text)}</b><span>${esc(a.at)}</span></div>
+        <div class="what"><b>${esc(a.text)}</b><span>${esc(fmtTime(a.at))}</span></div>
       </div>`).join('');
     }
   } catch (e) { console.warn(e); }
@@ -657,7 +665,7 @@ BOXES.forEach(b => {
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input, b); }
   });
-  btn.onclick = () => send(input);
+  btn.onclick = () => send(input, b);
 });
 
 async function send(input, box) {
