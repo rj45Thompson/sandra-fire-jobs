@@ -369,7 +369,14 @@ def resume_text(path: Path) -> str:
             # crude but dependency-free: pull text between BT/ET or parens
             chunks = re.findall(r"\(([^)]{2,})\)", raw)
             return " ".join(chunks)
-    except (OSError, KeyError, ValueError):
+    except Exception:
+        # Deliberately broad: this parses arbitrary bytes a person uploaded,
+        # in three different formats, on a best-effort basis. A malformed or
+        # unusual file (BadZipFile on a corrupted/converted .docx, a
+        # SyntaxError-derived ParseError on odd XML, anything else) must fall
+        # through to the "" fallback below, never take down the request that
+        # is also responsible for writing the file and recording it - a résumé
+        # that merely fails to parse must still upload successfully.
         pass
     return ""
 
@@ -593,8 +600,41 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
         return True
 
+    def _safe_error(self, e: Exception) -> None:
+        """
+        Last-resort net. An unhandled exception partway through a handler -
+        exactly what happened tonight when a résumé that failed to parse
+        crashed the whole /upload request - otherwise breaks the HTTP
+        response with no error the browser can show and no server log
+        explaining why. This guarantees SOME answer comes back, and that the
+        real cause is visible in server.err instead of silence.
+        """
+        import traceback
+        traceback.print_exc()
+        try:
+            log_event(f"Request error on {self.path[:60]}: {type(e).__name__}: {e}")
+        except sqlite3.Error:
+            pass
+        try:
+            self._send({"error": f"Something went wrong on this request "
+                                 f"({type(e).__name__}). Nothing was lost - "
+                                 "try again."}, 500)
+        except (BrokenPipeError, ConnectionAbortedError, OSError):
+            pass   # the client already gave up; nothing left to send to
+
     def do_GET(self):
-        p = self.path.split("?")[0]
+        try:
+            self._do_GET(self.path.split("?")[0])
+        except Exception as e:
+            self._safe_error(e)
+
+    def do_POST(self):
+        try:
+            self._do_POST()
+        except Exception as e:
+            self._safe_error(e)
+
+    def _do_GET(self, p):
         if p == "/" or not p.startswith(("/health", "/profile", "/certs", "/employers",
                                          "/postings", "/applications", "/stats", "/scan",
                                          "/chat", "/upload")):
@@ -663,7 +703,7 @@ class Handler(BaseHTTPRequestHandler):
 
         return self._send({"error": "not found"}, 404)
 
-    def do_POST(self):
+    def _do_POST(self):
         p = self.path.split("?")[0]
         if not self._authed():
             return self._send({"error": "bad token"}, 401)
