@@ -246,6 +246,34 @@ EMPLOYERS_JSON = Path(__file__).resolve().parent / "employers.json"
 SOURCES_JSON = Path(__file__).resolve().parent / "sources.json"
 
 
+DEFAULT_SOURCES = [
+    # nursing / care - she has nursing education but is not registered,
+    # so these lean to care-aide and support roles she can take today
+    ("Job Bank - health care aide, Alberta", "https://www.jobbank.gc.ca/jobsearch/jobsearch?searchstring=health+care+aide&locationstring=Alberta", "healthcare"),
+    ("Indeed - care aide, Alberta", "https://ca.indeed.com/jobs?q=health+care+aide&l=Alberta", "healthcare"),
+    ("LinkedIn - nursing & care, Alberta", "https://www.linkedin.com/jobs/search/?keywords=nurse%20OR%20care%20aide&location=Alberta%2C%20Canada", "healthcare"),
+    ("AHS careers - all health jobs", "https://careers.albertahealthservices.ca/", "healthcare"),
+    ("Job Bank - nursing, British Columbia", "https://www.jobbank.gc.ca/jobsearch/jobsearch?searchstring=nurse&locationstring=British+Columbia", "healthcare"),
+    ("Indeed - care aide, British Columbia", "https://ca.indeed.com/jobs?q=care+aide&l=British+Columbia", "healthcare"),
+    ("Indeed - nursing & care, Toronto", "https://ca.indeed.com/jobs?q=nurse+OR+care+aide&l=Toronto%2C+ON", "healthcare"),
+    # firefighter - wide geography
+    ("Job Bank - firefighter, Alberta", "https://www.jobbank.gc.ca/jobsearch/jobsearch?searchstring=firefighter&locationstring=Alberta", "fire"),
+    ("Job Bank - firefighter, British Columbia", "https://www.jobbank.gc.ca/jobsearch/jobsearch?searchstring=firefighter&locationstring=British+Columbia", "fire"),
+    ("Indeed - firefighter, Alberta", "https://ca.indeed.com/jobs?q=firefighter&l=Alberta", "fire"),
+    # anything, near home
+    ("Indeed - all jobs, Onoway area", "https://ca.indeed.com/jobs?q=&l=Onoway%2C+AB", "general"),
+]
+
+
+def seed_sources() -> int:
+    cur = db()
+    for name, url, kind in DEFAULT_SOURCES:
+        cur.execute("INSERT OR IGNORE INTO sources (name,url,kind) VALUES (?,?,?)",
+                    (name, url, kind))
+    cur.commit()
+    return cur.execute("SELECT COUNT(*) c FROM sources").fetchone()["c"]
+
+
 def seed_employers() -> int:
     """
     Load the verified employer registry.
@@ -343,6 +371,83 @@ def resume_text(path: Path) -> str:
     except (OSError, KeyError, ValueError):
         pass
     return ""
+
+
+# What an application actually asks for, and the plain question to ask her.
+# Only these are chased - nothing invented, nothing decorative.
+REQUIRED_FIELDS = [
+    ("first_name",  "What is your legal first name?"),
+    ("last_name",   "And your last name?"),
+    ("email",       "What email should employers use?"),
+    ("phone",       "What phone number?"),
+    ("city",        "What town or city do you live in?"),
+    ("province",    "Which province?"),
+    ("address",     "What is your street address? Applications ask for it."),
+    ("postal",      "What is your postal code?"),
+    ("work_auth",   "Are you a Canadian citizen, a permanent resident, or on a work permit?"),
+    ("licence_class", "What class is your driver's licence, and do you have air brakes?"),
+    ("relocate",    "Would you relocate for the right job, or stay near Onoway?"),
+    ("available_from", "When could you start?"),
+    ("crc",         "Do you have a current criminal record check with vulnerable sector?"),
+    ("ref1_name",   "Who is one work reference - name and how to reach them?"),
+]
+
+
+def profile_from_resume(path: Path) -> int:
+    """Pull the obvious identity details straight off the résumé."""
+    text = resume_text(path)
+    if not text:
+        return 0
+    flat = re.sub(r"[ \t]+", " ", text)
+    found = {}
+
+    m = re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", flat)
+    if m:
+        found["email"] = m.group(0).strip(".,;")
+
+    m = re.search(r"(\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}", flat)
+    if m:
+        found["phone"] = m.group(0).strip()
+
+    m = re.search(r"\b([A-Z]\d[A-Z])[\s-]?(\d[A-Z]\d)\b", flat)
+    if m:
+        found["postal"] = f"{m.group(1)} {m.group(2)}"
+
+    for prov, full in [("Alberta", "Alberta"), ("British Columbia", "British Columbia"),
+                       ("\bAB\b", "Alberta"), ("\bBC\b", "British Columbia"),
+                       ("Ontario", "Ontario"), ("Saskatchewan", "Saskatchewan")]:
+        if re.search(prov, flat):
+            found["province"] = full
+            break
+
+    for city in ["Onoway", "Lac Ste. Anne", "Sangudo", "Mayerthorpe", "Edmonton",
+                 "Spruce Grove", "Stony Plain", "Calgary", "Vancouver", "Toronto"]:
+        if re.search(re.escape(city), flat, re.I):
+            found["city"] = city
+            break
+
+    # name: first non-empty line that looks like a person, not a heading
+    for line in [l.strip() for l in text.splitlines() if l.strip()][:6]:
+        if "@" in line or re.search(r"\d{3}", line):
+            continue
+        words = [w for w in re.split(r"[\s,|]+", line) if w]
+        if 2 <= len(words) <= 4 and all(re.match(r"^[A-Z][A-Za-z.'-]*$", w) for w in words):
+            found["first_name"] = words[0].rstrip(".")
+            found["last_name"] = words[-1]
+            break
+
+    n = 0
+    for k, v in found.items():
+        cur = db().execute("SELECT value FROM profile WHERE key=?", (k,)).fetchone()
+        if cur and str(cur["value"]).strip():
+            continue                      # never overwrite what she already said
+        db().execute("INSERT INTO profile (key,value) VALUES (?,?) "
+                     "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (k, v))
+        n += 1
+    if n:
+        db().commit()
+        log_event(f"Read {n} details off the résumé")
+    return n
 
 
 def lift_certs_from_resume(path: Path) -> int:
@@ -533,8 +638,27 @@ class Handler(BaseHTTPRequestHandler):
             return self._send([dict(r) for r in
                                db().execute("SELECT * FROM sources ORDER BY id DESC")])
 
+        if p == "/profile/gaps":
+            prof = {r["key"]: (r["value"] or "").strip()
+                    for r in db().execute("SELECT key,value FROM profile")}
+            gaps = [{"key": k, "question": q}
+                    for k, q in REQUIRED_FIELDS if not prof.get(k)]
+            have = [{"key": k, "value": prof[k]}
+                    for k, _ in REQUIRED_FIELDS if prof.get(k)]
+            return self._send({"have": have, "gaps": gaps,
+                               "complete": len(have), "total": len(REQUIRED_FIELDS)})
+
         if p == "/stats":
             return self._send(self._stats())
+
+        if p == "/email/status":
+            return self._send({"connected": bool(ENV.get("GMAIL_APP_PASSWORD")),
+                               "address": ENV.get("GMAIL_ADDRESS", "")})
+
+        if p == "/inbox":
+            import email_client
+            return self._send(email_client.scan_inbox(
+                ENV.get("GMAIL_ADDRESS", ""), ENV.get("GMAIL_APP_PASSWORD", "")))
 
         return self._send({"error": "not found"}, 404)
 
@@ -572,8 +696,12 @@ class Handler(BaseHTTPRequestHandler):
                          (kind, fname, str(target)))
             db().commit()
             log_event(f"Document stored: {fname}")
-            lifted = lift_certs_from_resume(target) if kind == "resumes" else 0
-            return self._send({"ok": True, "path": str(target), "lifted_certs": lifted})
+            lifted = fields = 0
+            if kind == "resumes":
+                lifted = lift_certs_from_resume(target)
+                fields = profile_from_resume(target)
+            return self._send({"ok": True, "path": str(target),
+                               "lifted_certs": lifted, "lifted_fields": fields})
 
         if p == "/sources/chat":
             return self._send(self._sources_chat(b.get("message", "")))
@@ -606,6 +734,16 @@ class Handler(BaseHTTPRequestHandler):
             db().execute("DELETE FROM sources WHERE id=?", (b.get("id"),))
             db().commit()
             return self._send({"ok": True})
+
+        if p == "/profile/chat":
+            return self._send(self._profile_chat(b.get("message", "")))
+
+        if p == "/apply/start":
+            return self._send(self._apply_start(b.get("url", "")))
+
+        if p == "/email/connect":
+            return self._send(self._email_connect(
+                b.get("address", ""), b.get("app_password", "")))
 
         if p == "/upgrade":
             return self._send(self._upgrade(b.get("request", "")))
@@ -706,7 +844,9 @@ class Handler(BaseHTTPRequestHandler):
                  src["url"], "custom", "varies", "Added by you as a place to look."))
         db().commit()
 
-        for e in db().execute("SELECT * FROM employers").fetchall():
+        # cap per run so the button never spins for minutes
+        rows = db().execute("SELECT * FROM employers ORDER BY id DESC LIMIT 14").fetchall()
+        for e in rows:
             url = e["careers_url"]
             if not url:
                 continue
@@ -714,7 +854,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 req = urllib.request.Request(
                     url, headers={"User-Agent": "Mozilla/5.0 (Muster job watcher)"})
-                with urllib.request.urlopen(req, timeout=12) as resp:
+                with urllib.request.urlopen(req, timeout=6) as resp:
                     html = resp.read(400_000).decode("utf-8", "ignore")
             except (urllib.error.URLError, OSError, TimeoutError):
                 continue
@@ -798,6 +938,98 @@ class Handler(BaseHTTPRequestHandler):
                     log_event(f"Added {len(added)} place(s) to look, via chat")
         return {"reply": reply, "added": added}
 
+    def _profile_chat(self, message: str) -> dict:
+        """She answers in plain words; we work out which field it fills."""
+        prof = {r["key"]: (r["value"] or "") for r in
+                db().execute("SELECT key,value FROM profile")}
+        gaps = [(k, q) for k, q in REQUIRED_FIELDS if not prof.get(k, "").strip()]
+        gap_list = "\n".join(f"- {k}: {q}" for k, q in gaps) or "(nothing missing)"
+
+        system = (
+            "You are helping Sandra fill in the details a job application needs. "
+            "She just said something. Work out which of these outstanding fields "
+            "her answer fills, if any.\n\n"
+            f"Outstanding fields:\n{gap_list}\n\n"
+            "Reply with ONE short friendly sentence confirming what you recorded, "
+            "then on a NEW LINE a JSON object of the fields to save, e.g.\n"
+            '{"set": {"city": "Onoway", "province": "Alberta"}}\n\n'
+            "Use only keys from the list above. If her message answers nothing, "
+            "reply normally and use {\"set\": {}}. Never invent a value."
+        )
+        try:
+            raw = _chat_claude_cli(system, [], message)
+        except (RuntimeError, OSError) as e:
+            return {"reply": f"Could not reach the assistant ({e}).", "saved": {}}
+
+        reply, saved = raw.strip(), {}
+        m = re.search(r"\{[\s\S]*\}", raw)
+        if m:
+            try:
+                data = json.loads(m.group(0))
+            except json.JSONDecodeError:
+                data = None
+            if isinstance(data, dict) and isinstance(data.get("set"), dict):
+                reply = raw[:m.start()].strip() or "Saved."
+                valid = {k for k, _ in REQUIRED_FIELDS}
+                for k, v in data["set"].items():
+                    if k in valid and str(v).strip():
+                        db().execute(
+                            "INSERT INTO profile (key,value) VALUES (?,?) "
+                            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                            (k, str(v).strip()))
+                        saved[k] = str(v).strip()
+                if saved:
+                    db().commit()
+                    log_event(f"Profile: recorded {', '.join(saved)}")
+        return {"reply": reply, "saved": saved}
+
+    def _apply_start(self, url: str) -> dict:
+        """Open the posting and fill it in a real browser, ready for review."""
+        if not url.startswith("http"):
+            return {"error": "That does not look like a web address."}
+        import applier
+        profile = {r["key"]: r["value"] for r in
+                   db().execute("SELECT key,value FROM profile")}
+        resume = db().execute(
+            "SELECT path FROM documents WHERE kind='resumes' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        resume_path = resume["path"] if resume else None
+        headless = ENV.get("HEADLESS", "false").lower() == "true"
+        try:
+            rep = applier.fill_application(url, profile, resume_path,
+                                           channel=ENV.get("BROWSER_CHANNEL", "msedge"),
+                                           headless=headless)
+        except Exception as e:
+            return {"error": f"Could not run the browser: {e}"}
+        if rep.get("ok"):
+            db().execute(
+                "INSERT INTO applications (posting_id,status,notes) VALUES (NULL,'review',?)",
+                (f"Auto-filled {url} - {len(rep.get('filled', []))} fields",))
+            db().commit()
+            log_event(f"Filled an application at {url[:60]} - review it")
+        return rep
+
+    def _email_connect(self, address: str, app_password: str) -> dict:
+        import email_client
+        ok, msg = email_client.test_login(address, app_password)
+        if not ok:
+            return {"ok": False, "message": msg}
+        # persist to .env (gitignored, never served)
+        env_path = ROOT / ".env"
+        lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
+        def setline(key, val):
+            for i, ln in enumerate(lines):
+                if ln.strip().startswith(key + "="):
+                    lines[i] = f"{key}={val}"; return
+            lines.append(f"{key}={val}")
+        setline("GMAIL_ADDRESS", address)
+        setline("GMAIL_APP_PASSWORD", app_password.replace(" ", ""))
+        env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        ENV["GMAIL_ADDRESS"] = address
+        ENV["GMAIL_APP_PASSWORD"] = app_password.replace(" ", "")
+        log_event("Email connected")
+        return {"ok": True, "message": msg}
+
     def _upgrade(self, request: str) -> dict:
         """
         Let the assistant rewrite its own front-end.
@@ -809,9 +1041,14 @@ class Handler(BaseHTTPRequestHandler):
         if not request.strip():
             return {"error": "Say what you would like changed."}
 
-        target = "index.html" if re.search(
-            r"\b(text|word|label|button|tab|section|wording|copy|say|title)\b",
-            request, re.I) else "styles.css"
+        # Wording changes touch the markup; everything about how it LOOKS is CSS.
+        # "make the buttons rounder" is styling, not copy - so match on the verb,
+        # not on the noun. Getting this wrong rewrote the wrong file.
+        wording = re.search(
+            r"\b(wording|reword|rename|renames?|caption|spelling|typo|"
+            r"call it|greeting|change the (text|title|words)|"
+            r"label text|message text)\b", request, re.I)
+        target = "index.html" if wording else "styles.css"
         src = WEB_DIR / target
         current = src.read_text(encoding="utf-8")
 
@@ -839,11 +1076,16 @@ class Handler(BaseHTTPRequestHandler):
 
         new = re.sub(r"^```[a-zA-Z]*\n|```\s*$", "", new.strip())
 
-        ok = ("<html" in new.lower() and "</html>" in new.lower()) if target == "index.html" \
-             else ("{" in new and "}" in new and "--" in new)
-        if not ok or len(new) < 400:
-            return {"error": "The rewrite did not look like a valid file, so "
-                             "nothing was changed."}
+        low = new.lower()
+        if target == "index.html":
+            ok = "<html" in low and "</html>" in low and 'id="nav"' in low
+        else:
+            ok = new.count("{") > 20 and "--pink" in new
+        if not ok or len(new) < 800:
+            return {"error": f"The rewrite of {target} came back looking incomplete "
+                             f"({len(new)} characters), so nothing was changed. "
+                             "Nothing is broken - try asking again, or be more "
+                             "specific about what you want."}
 
         src.write_text(new, encoding="utf-8")
         log_event(f"Front-end upgraded: {request[:70]}")
@@ -918,6 +1160,15 @@ class Handler(BaseHTTPRequestHandler):
             "fire jobs. Raise this when it is relevant, but do not lecture about it "
             "every message.\n\n"
 
+            "YOU CAN CHANGE THIS WEBSITE. If she asks for anything about how "
+            "the app looks, reads or behaves - colours, theme, wording, text "
+            "size, layout - do not explain how. Reply with one short sentence "
+            "saying you are doing it, then on a NEW LINE output exactly this "
+            "JSON and nothing after it: "
+            '{"upgrade": "her request restated clearly"}'
+            "The app then performs the change and reloads. Only for appearance "
+            "and wording, never for job data."
+
             "Applications close on fixed dates and Alberta municipal hiring clusters "
             "in the fall, so timing matters more than volume. If she asks what to do "
             "next, prefer the specific and immediate over the general.\n\n"
@@ -952,6 +1203,15 @@ class Handler(BaseHTTPRequestHandler):
             reply = (f"I could not reach the {provider} backend ({e}).\n\n"
                      "If you are using Ollama, check it is running:  ollama serve\n"
                      "Or set CHAT_PROVIDER=anthropic with an API key in .env.")
+
+        # did she ask for the site itself to change?
+        pat = chr(123) + r'\s*"upgrade"\s*:\s*"([^"]{4,300})"\s*' + chr(125)
+        m = re.search(pat, reply)
+        if m:
+            spoken = reply[:m.start()].strip() or "Changing that now."
+            res = self._upgrade(m.group(1))
+            tail = res.get("message") or res.get("error", "")
+            reply = spoken + chr(10) + chr(10) + tail
 
         db().execute("INSERT INTO chat (role,text) VALUES ('assistant',?)", (reply,))
         db().commit()
@@ -1075,6 +1335,8 @@ def main() -> None:
     db()
     if not db().execute("SELECT COUNT(*) c FROM employers").fetchone()["c"]:
         seed_employers()
+    if not db().execute("SELECT COUNT(*) c FROM sources").fetchone()["c"]:
+        seed_sources()
 
     tokset = TOKEN and TOKEN != "change-me-to-something-random"
     banner = f"""

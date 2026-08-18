@@ -33,6 +33,7 @@
       <button data-panel="docs"><span class="ico">❋</span><span class="lbl">Documents</span><span class="tag" id="tag-docs">0</span></button>
       <button data-panel="jobs"><span class="ico">◎</span><span class="lbl">Jobs</span><span class="tag" id="tag-jobs">0</span></button>
       <button data-panel="apps"><span class="ico">✈</span><span class="lbl">Applications</span><span class="tag" id="tag-apps">0</span></button>
+      <button data-panel="inbox"><span class="ico">✉</span><span class="lbl">Inbox</span><span class="tag" id="tag-inbox">0</span></button>
       <button data-panel="chat"><span class="ico">✿</span><span class="lbl">Chat</span></button>
       <button data-panel="upgrade"><span class="ico">✧</span><span class="lbl">Upgrade me</span></button>
     </nav>
@@ -55,7 +56,6 @@
       </div>
       <div class="spacer"></div>
       <button class="btn quiet" id="btn-theme" title="Theme">◐</button>
-      <button class="btn" id="btn-scan">Find jobs</button>
     </header>
 
     <div class="wrap">
@@ -160,210 +160,38 @@
         <div class="banner">
           <span class="bi">🔒</span>
           <div><b>Stays on this machine</b>
-          Everything here is saved to your local engine and gitignored. The public
-          website never receives it.</div>
+          Read from your résumé and saved locally. The public website never sees it.</div>
         </div>
-
 
         <div class="card" style="margin-bottom:18px">
-          <h3>Not sure what to put?</h3>
-          <p class="hint">Ask about any field and I will tell you what employers are actually looking for.</p>
+          <h3>Still needed</h3>
+          <p class="hint">Only the things a job application will actually ask for that we do not have yet. Answer them in the chat below, in your own words.</p>
+          <div id="gap-list">
+            <div class="empty"><div class="big">✦</div>Upload your résumé in Documents and this fills itself in.</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:18px">
+          <h3>Answer them here</h3>
+          <p class="hint">Plain sentences are fine — "I live in Onoway, Alberta, postal T0E 1V0" fills three at once.</p>
           <div class="chat mini">
             <div class="msgs" id="msgs-profile">
-              <div class="msg bot">Fill in what you can below. If a field is unclear, ask me - especially the nursing registration ones.</div>
+              <div class="msg bot">Tell me anything from the list above and I will record it. You can answer several at once.</div>
             </div>
             <div class="composer">
-              <textarea id="chat-input-profile" placeholder="e.g. what should I put for registration status?" rows="1"></textarea>
-              <button class="btn" id="btn-send-profile">Send</button>
+              <textarea id="chat-input-profile" placeholder="e.g. I'm a Canadian citizen with a class 5 licence…" rows="1"></textarea>
+              <button class="btn" id="btn-send-profile">Save it</button>
             </div>
           </div>
         </div>
-        <form id="profile-form" class="card">
-          <fieldset>
-            <legend>Personal details</legend>
-            <p class="leg-hint">The identity block every application asks for.</p>
-            <div class="row">
-              <div class="field"><label>Legal first name <span class="req">*</span></label><input type="text" name="first_name" required></div>
-              <div class="field"><label>Last name <span class="req">*</span></label><input type="text" name="last_name" required></div>
-            </div>
-            <div class="row">
-              <div class="field"><label>Email <span class="req">*</span></label><input type="email" name="email" required></div>
-              <div class="field"><label>Phone <span class="req">*</span></label><input type="tel" name="phone" required></div>
-            </div>
-            <div class="field"><label>Street address</label><input type="text" name="address"></div>
-            <div class="row">
-              <div class="field"><label>City / town</label><input type="text" name="city"></div>
-              <div class="field"><label>Province</label>
-                <select name="province">
-                  <option>Alberta</option><option>British Columbia</option><option>Saskatchewan</option>
-                  <option>Manitoba</option><option>Ontario</option><option>Other</option>
-                </select></div>
-              <div class="field"><label>Postal code</label><input type="text" name="postal"></div>
-            </div>
-            <div class="row">
-              <div class="field"><label>Work authorization</label>
-                <select name="work_auth">
-                  <option>Canadian citizen</option><option>Permanent resident</option>
-                  <option>Work permit</option><option>Other</option>
-                </select></div>
-              <div class="field"><label>Willing to relocate?</label>
-                <select name="relocate"><option>Yes</option><option>Within Alberta only</option><option>No</option></select></div>
-            </div>
-          </fieldset>
 
-          <fieldset>
-            <legend>What you're looking for</legend>
-            <p class="leg-hint">Tick every track you'd take work in. Muster only watches the ones you pick.</p>
-            <div class="row">
-              <label class="track"><input type="checkbox" name="track_fire" checked> <span>🚒 Fire service</span></label>
-              <label class="track"><input type="checkbox" name="track_health" checked> <span>⚕️ Healthcare</span></label>
-              <label class="track"><input type="checkbox" name="track_any"> <span>✦ Anything else</span></label>
-            </div>
-            <div class="row">
-              <div class="field"><label>Minimum acceptable pay</label><input type="text" name="min_pay" placeholder="e.g. $22/hr, or leave blank"></div>
-              <div class="field"><label>How far will you travel?</label>
-                <select name="commute">
-                  <option>Up to 30 minutes</option><option>Up to 1 hour</option>
-                  <option>Up to 90 minutes</option><option>Any distance / will relocate</option>
-                </select></div>
-              <div class="field"><label>Shift work OK?</label>
-                <select name="shifts"><option>Yes, any shift</option><option>Days only</option><option>No nights</option></select></div>
-            </div>
-          </fieldset>
-
-          <fieldset>
-            <legend>Healthcare and nursing</legend>
-            <p class="leg-hint">Registration status matters more than anything else here — it decides which jobs are open to you today versus after paperwork. Leave blank if this track isn't for you.</p>
-            <div class="row">
-              <div class="field"><label>Nursing education</label>
-                <select name="nursing_education">
-                  <option value="">— none —</option>
-                  <option>Registered Nurse (BN / BScN)</option>
-                  <option>Licensed Practical Nurse (LPN)</option>
-                  <option>Registered Psychiatric Nurse</option>
-                  <option>Nursing diploma</option>
-                  <option>Partial / did not complete</option>
-                  <option>Health Care Aide certificate</option>
-                </select></div>
-              <div class="field"><label>Where did you train?</label><input type="text" name="nursing_country" placeholder="Country / province"></div>
-              <div class="field"><label>Year completed</label><input type="text" name="nursing_year"></div>
-            </div>
-            <div class="row">
-              <div class="field"><label>Registration status</label>
-                <select name="registration_status">
-                  <option value="">— not applicable —</option>
-                  <option>Not registered in Canada</option>
-                  <option>Registration lapsed / inactive</option>
-                  <option>In progress — application submitted</option>
-                  <option>Currently registered</option>
-                </select></div>
-              <div class="field"><label>Credential assessment done?</label>
-                <select name="credential_assessment">
-                  <option value="">— not started —</option>
-                  <option>NNAS in progress</option><option>NNAS complete</option>
-                  <option>IQAS complete</option><option>Not required</option>
-                </select></div>
-              <div class="field"><label>English language test</label>
-                <select name="language_test">
-                  <option value="">— none —</option>
-                  <option>Not required (trained in English)</option>
-                  <option>IELTS / CELBAN passed</option><option>Booked</option>
-                </select></div>
-            </div>
-            <div class="field"><label>Notes on the nursing situation</label>
-              <textarea name="nursing_notes" placeholder="What happened with registration, what's outstanding, what you'd need. The chat uses this to work out your options — plain and specific beats tidy."></textarea></div>
-          </fieldset>
-
-          <fieldset>
-            <legend>Current work</legend>
-            <p class="leg-hint">Where you work now, in any field. Fire, healthcare or otherwise.</p>
-            <div class="row">
-              <div class="field"><label>Current employer</label><input type="text" name="current_dept" placeholder="e.g. Lac Ste. Anne County"></div>
-              <div class="field"><label>Role / title</label><input type="text" name="rank" placeholder="e.g. Paid-on-call firefighter"></div>
-            </div>
-            <div class="row">
-              <div class="field"><label>Started</label><input type="date" name="service_start"></div>
-              <div class="field"><label>Employment sought</label>
-                <select name="employment_type">
-                  <option>Full-time</option><option>Paid-on-call / casual</option>
-                  <option>Either</option><option>Seasonal / wildland</option>
-                </select></div>
-              <div class="field"><label>Earliest start</label><input type="date" name="available_from"></div>
-            </div>
-            <div class="field"><label>What you actually do &mdash; duties, calls, responsibilities</label>
-              <textarea name="incidents" placeholder="For fire: structure fires, MVIs, medical assists. For care work: residents supported, shifts, duties. Rough numbers are fine."></textarea></div>
-          </fieldset>
-
-          <fieldset>
-            <legend>Licences, checks and fitness</legend>
-            <p class="leg-hint">Employers screen on these before they read anything else. Healthcare and fire both gate on the record checks.</p>
-            <div class="row">
-              <div class="field"><label>Driver's licence class</label>
-                <select name="licence_class">
-                  <option>Class 5</option><option>Class 5 + air brakes (Q)</option>
-                  <option>Class 4</option><option>Class 3</option>
-                  <option>Class 3 + air brakes (Q)</option><option>Class 1</option>
-                </select></div>
-              <div class="field"><label>Licence expiry</label><input type="date" name="licence_expiry"></div>
-              <div class="field"><label>Driver's abstract on file?</label>
-                <select name="abstract"><option>Yes</option><option>No — need to order</option></select></div>
-            </div>
-            <div class="row">
-              <div class="field"><label>Fitness test held</label>
-                <select name="fitness">
-                  <option>None yet</option><option>CPAT</option><option>Firefit</option>
-                  <option>Department-specific</option>
-                </select></div>
-              <div class="field"><label>Fitness test date</label><input type="date" name="fitness_date"></div>
-              <div class="field"><label>Respirator fit test</label>
-                <select name="fit_test"><option>Current</option><option>Expired</option><option>Never</option></select></div>
-            </div>
-            <div class="row">
-              <div class="field"><label>Criminal record check</label>
-                <select name="crc"><option>Current</option><option>Expired</option><option>Never obtained</option></select></div>
-              <div class="field"><label>Vulnerable sector check</label>
-                <select name="vsc"><option>Current</option><option>Expired</option><option>Never obtained</option></select></div>
-              <div class="field"><label>Immunizations up to date</label>
-                <select name="immunization"><option>Yes</option><option>Partial</option><option>Unknown</option></select></div>
-            </div>
-          </fieldset>
-
-          <fieldset>
-            <legend>Education and history</legend>
-            <p class="leg-hint">Education and any non-fire work history worth carrying.</p>
-            <div class="row">
-              <div class="field"><label>Highest education</label>
-                <select name="education">
-                  <option>High school</option><option>Some post-secondary</option>
-                  <option>Certificate / diploma</option><option>Degree</option>
-                </select></div>
-              <div class="field"><label>Institution</label><input type="text" name="school"></div>
-            </div>
-            <div class="field"><label>Other work history</label>
-              <textarea name="work_history" placeholder="Employers, roles, dates. Anything with shift work, physical demand, public contact or emergency response is worth naming."></textarea></div>
-            <div class="field"><label>Why the fire service — in her own words</label>
-              <textarea name="motivation" placeholder="Used as raw material for cover letters. Plain and specific beats polished."></textarea></div>
-          </fieldset>
-
-          <fieldset>
-            <legend>References</legend>
-            <div class="row">
-              <div class="field"><label>Reference 1 — name</label><input type="text" name="ref1_name"></div>
-              <div class="field"><label>Relationship</label><input type="text" name="ref1_rel" placeholder="Fire chief"></div>
-              <div class="field"><label>Phone / email</label><input type="text" name="ref1_contact"></div>
-            </div>
-            <div class="row">
-              <div class="field"><label>Reference 2 — name</label><input type="text" name="ref2_name"></div>
-              <div class="field"><label>Relationship</label><input type="text" name="ref2_rel"></div>
-              <div class="field"><label>Phone / email</label><input type="text" name="ref2_contact"></div>
-            </div>
-          </fieldset>
-
-          <div style="display:flex;gap:12px;align-items:center">
-            <button type="submit" class="btn">Save profile</button>
-            <span id="profile-saved" style="color:var(--ok);font-size:13.5px"></span>
+        <div class="card">
+          <h3>What we have</h3>
+          <p class="hint">Read from your résumé and from what you have told me.</p>
+          <div id="have-list">
+            <div class="empty"><div class="big">✧</div>Nothing yet.</div>
           </div>
-        </form>
+        </div>
       </section>
 
       <!-- ── DOCUMENTS ── -->
@@ -483,7 +311,7 @@
           <table>
             <thead><tr>
               <th>Employer</th><th>Role</th><th>Track</th><th>Type</th><th>City</th>
-              <th>Closes</th><th>Match</th><th>Portal</th><th></th>
+              <th>Closes</th><th>Match</th><th>Portal</th><th>Apply</th>
             </tr></thead>
             <tbody id="jobs-body">
               <tr><td colspan="9"><div class="empty"><div class="big">◎</div>
@@ -555,6 +383,38 @@
           <div style="margin-top:14px;display:flex;gap:10px">
             <button class="btn quiet" id="btn-undo-upgrade" type="button">Undo last change</button>
           </div>
+        </div>
+      </section>
+
+
+      <!-- ── INBOX ── -->
+      <section class="panel" id="p-inbox" hidden>
+        <div class="banner">
+          <span class="bi">✉</span>
+          <div><b>Replies, interviews and rejections</b>
+          Muster reads your email read-only and threads anything job-related here.
+          Your password never leaves this machine.</div>
+        </div>
+
+        <div class="card" id="email-card" style="margin-bottom:18px">
+          <h3>Connect your email</h3>
+          <p class="hint">Gmail needs a one-time <b>App Password</b>, not your normal password.
+          Turn on 2-Step Verification, then Google Account → Security → App passwords → name it "Muster".</p>
+          <div class="row" style="align-items:end">
+            <div class="field" style="margin:0;flex:2"><label>Gmail address</label>
+              <input type="email" id="email-addr" placeholder="sandra.ayany@gmail.com"></div>
+            <div class="field" style="margin:0;flex:2"><label>App password (16 characters)</label>
+              <input type="password" id="email-pw" placeholder="xxxx xxxx xxxx xxxx"></div>
+            <button class="btn" id="btn-email-connect" type="button">Connect</button>
+          </div>
+          <div id="email-status" style="margin-top:12px;font-size:13.5px"></div>
+        </div>
+
+        <div style="display:flex;gap:12px;margin-bottom:16px">
+          <button class="btn" id="btn-inbox-refresh">Check email now</button>
+        </div>
+        <div id="inbox-list">
+          <div class="empty"><div class="big">✉</div>Connect your email, then check for replies.</div>
         </div>
       </section>
 

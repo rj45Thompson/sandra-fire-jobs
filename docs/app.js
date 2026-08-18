@@ -53,6 +53,7 @@ const TITLES = {
   apps:   ['Applications', 'Submitted, in review, and replies'],
   chat:   ['Chat', 'Ask anything about the search'],
   upgrade: ['Upgrade me', 'Change how this app looks and reads'],
+  inbox: ['Inbox', 'Replies, interviews and rejections'],
 };
 
 $('#nav').addEventListener('click', e => {
@@ -131,39 +132,65 @@ $('#btn-connect').onclick = async () => {
   if (await ping()) refreshAll();
 };
 
-/* ---------- profile ---------- */
-const PFORM = $('#profile-form');
+/* ---------- profile: résumé-driven, gaps chased in chat ---------- */
+async function loadGaps() {
+  if (!ONLINE) return;
+  try {
+    const r = await api('/profile/gaps');
+    $('#tag-profile').textContent = `${r.complete}/${r.total}`;
 
-PFORM.addEventListener('submit', async e => {
-  e.preventDefault();
-  const data = Object.fromEntries(new FormData(PFORM).entries());
-  LS.set('profile', data);
-  let msg = 'Saved locally';
-  if (ONLINE) {
-    try { await api('/profile', { method: 'POST', body: JSON.stringify(data) }); msg = 'Saved to engine'; }
-    catch (err) { msg = 'Saved locally (engine error)'; }
-  }
-  $('#profile-saved').textContent = msg + ' ✓';
-  setTimeout(() => $('#profile-saved').textContent = '', 3200);
-  updateProfileTag();
-});
+    const gl = $('#gap-list');
+    if (gl) {
+      gl.innerHTML = r.gaps.length
+        ? r.gaps.map(g => `<div class="dl">
+            <div class="when soon">NEED</div>
+            <div class="what"><b>${esc(g.question)}</b></div>
+          </div>`).join('')
+        : '<div class="empty"><div class="big">✓</div>Nothing missing. You have everything an application asks for.</div>';
+    }
 
-function loadProfile() {
-  const p = LS.get('profile', {});
-  Object.entries(p).forEach(([k, v]) => {
-    const el = PFORM.elements[k];
-    if (el) el.value = v;
+    const hl = $('#have-list');
+    if (hl) {
+      hl.innerHTML = r.have.length
+        ? r.have.map(v => `<div class="dl">
+            <div class="what"><b>${esc(v.key.replace(/_/g,' '))}</b>
+              <span>${esc(v.value)}</span></div>
+          </div>`).join('')
+        : '<div class="empty"><div class="big">✧</div>Nothing yet.</div>';
+    }
+  } catch (e) { console.warn(e); }
+}
+
+async function askProfile(text) {
+  const box = BOXES.find(b => b.ctx === 'profile');
+  addMsg('me', text, box);
+  const inp = $('#chat-input-profile');
+  if (inp) { inp.value = ''; inp.style.height = 'auto'; }
+  if (!ONLINE) { addMsg('bot', 'The engine is not running yet.', box); return; }
+  addPending(box);
+  try {
+    const r = await api('/profile/chat', { method: 'POST', body: JSON.stringify({ message: text }) });
+    let m = r.reply || 'Saved.';
+    const keys = Object.keys(r.saved || {});
+    if (keys.length) m += '\n\nRecorded: ' + keys.map(k => k.replace(/_/g,' ')).join(', ');
+    setBotText(m, box);
+    await loadGaps();
+  } catch (e) { setBotText('Error: ' + e.message, box); }
+}
+
+if ($('#btn-send-profile')) {
+  $('#btn-send-profile').onclick = () => {
+    const t = $('#chat-input-profile').value.trim();
+    if (t) askProfile(t);
+  };
+  $('#chat-input-profile').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const t = e.target.value.trim();
+      if (t) askProfile(t);
+    }
   });
-  updateProfileTag();
 }
-
-function updateProfileTag() {
-  const fields = [...PFORM.elements].filter(e => e.name);
-  const filled = fields.filter(e => String(e.value || '').trim()).length;
-  const pct = fields.length ? Math.round(filled / fields.length * 100) : 0;
-  $('#tag-profile').textContent = pct + '%';
-}
-PFORM.addEventListener('input', updateProfileTag);
 
 /* ---------- certifications ---------- */
 async function loadCerts() {
@@ -243,8 +270,8 @@ function wireDrop(zoneSel, inputSel, kind, listSel) {
           });
           list[list.length - 1].uploaded = true;
           if (kind === 'resumes' && res.lifted_certs) {
-            await loadCerts();
-            alert(`Read your résumé and added ${res.lifted_certs} certification${res.lifted_certs === 1 ? '' : 's'}. Check the Certifications list.`);
+            await loadCerts(); await loadGaps();
+            alert(`Read your résumé and added ${res.lifted_certs} certification${res.lifted_certs === 1 ? '' : 's'} and ${res.lifted_fields || 0} profile detail${res.lifted_fields === 1 ? '' : 's'}.`);
           }
         } catch (err) { console.warn('upload failed', err); }
       }
@@ -315,15 +342,31 @@ function renderJobs() {
       <td>${esc(j.closes || 'open')}</td>
       <td><span class="chip ${chip}">${m}%</span></td>
       <td><span class="chip">${esc(j.ats || '?')}</span></td>
-      <td><a class="btn ghost" style="padding:5px 13px;font-size:12.5px" href="${esc(j.url)}" target="_blank" rel="noopener">Open</a></td>
+      <td><a class="btn ghost" style="padding:5px 11px;font-size:12px" href="${esc(j.url)}" target="_blank" rel="noopener">Open</a></td>
+      <td><button class="btn" style="padding:5px 11px;font-size:12px" data-apply="${esc(j.url)}">Fill it</button></td>
     </tr>`;
   }).join('');
+  $$('[data-apply]', body).forEach(b => b.onclick = () => startApply(b.dataset.apply));
 }
 $('#job-filter').addEventListener('input', renderJobs);
 
+async function startApply(url) {
+  if (!ONLINE) { alert('The engine is not running yet.'); return; }
+  if (!confirm('Open this posting and fill it with your details for review?\n\n' + url)) return;
+  try {
+    const r = await api('/apply/start', { method: 'POST', body: JSON.stringify({ url }) });
+    if (r.error) { alert('Could not start: ' + r.error); return; }
+    let m = `Filled ${r.filled ? r.filled.length : 0} field${(r.filled||[]).length===1?'':'s'}.`;
+    if (r.left_open) m += '\n\nA browser window is open with the form filled in. Review it and click submit yourself.';
+    if (r.notes && r.notes.length) m += '\n\n' + r.notes.join('\n');
+    alert(m);
+    await loadApps();
+  } catch (e) { alert('Apply failed: ' + e.message); }
+}
+
 async function scan() {
   if (!ONLINE) { alert('The engine is not running yet. Open the app at http://127.0.0.1:8770.'); return; }
-  const btns = [$('#btn-scan'), $('#btn-scan2')];
+  const btns = [$('#btn-scan2')];
   btns.forEach(b => b && (b.disabled = true, b.textContent = 'Scanning…'));
   try {
     const r = await api('/scan', { method: 'POST', body: '{}' });
@@ -340,7 +383,6 @@ async function scan() {
   } catch (e) { alert('Scan failed: ' + e.message); }
   btns.forEach(b => b && (b.disabled = false, b.textContent = 'Find jobs'));
 }
-$('#btn-scan').onclick = scan;
 $('#btn-scan2').onclick = scan;
 
 $('#btn-seed').onclick = async () => {
@@ -551,7 +593,7 @@ const BOXES = [
   { msgs: '#msgs-mini',    input: '#chat-input-mini',    send: '#btn-send-mini',    ctx: 'general'   },
   { msgs: '#msgs-jobs',    input: '#chat-input-jobs',    send: '#btn-send-jobs',    ctx: 'jobs'      },
   { msgs: '#msgs-docs',    input: '#chat-input-docs',    send: '#btn-send-docs',    ctx: 'documents' },
-  { msgs: '#msgs-profile', input: '#chat-input-profile', send: '#btn-send-profile', ctx: 'profile'   },
+  { msgs: '#msgs-profile', input: '#chat-input-profile', send: null, ctx: 'profile'   },
 ];
 
 function addMsg(role, text, only) {
@@ -592,7 +634,7 @@ function addPending(only) {
 }
 
 BOXES.forEach(b => {
-  const input = $(b.input), btn = $(b.send);
+  const input = $(b.input), btn = b.send ? $(b.send) : null;
   if (!input || !btn) return;
   input.addEventListener('input', () => {
     input.style.height = 'auto';
@@ -650,13 +692,59 @@ function restoreChat() {
   });
 }
 
+/* ---------- inbox + email ---------- */
+async function emailStatus() {
+  if (!ONLINE) return;
+  try {
+    const s = await api('/email/status');
+    const el = $('#email-status');
+    if (s.connected) {
+      if (el) el.innerHTML = `<span class="chip ok">connected</span> ${esc(s.address)}`;
+      if ($('#email-addr')) $('#email-addr').value = s.address;
+    } else if (el) { el.textContent = 'Not connected yet.'; }
+  } catch {}
+}
+
+if ($('#btn-email-connect')) $('#btn-email-connect').onclick = async () => {
+  const address = $('#email-addr').value.trim();
+  const app_password = $('#email-pw').value.trim();
+  if (!address || !app_password) { alert('Enter your Gmail address and the app password.'); return; }
+  $('#email-status').textContent = 'Checking…';
+  try {
+    const r = await api('/email/connect', { method: 'POST', body: JSON.stringify({ address, app_password }) });
+    $('#email-status').innerHTML = r.ok
+      ? '<span class="chip ok">connected</span> ' + esc(r.message)
+      : '<span class="chip bad">no</span> ' + esc(r.message);
+    if (r.ok) { $('#email-pw').value = ''; refreshInbox(); }
+  } catch (e) { $('#email-status').textContent = 'Error: ' + e.message; }
+};
+
+async function refreshInbox() {
+  if (!ONLINE) return;
+  const box = $('#inbox-list');
+  if (box) box.innerHTML = '<div class="empty"><div class="big">✉</div>Checking…</div>';
+  try {
+    const r = await api('/inbox');
+    if (!r.ok) { if (box) box.innerHTML = `<div class="empty"><div class="big">✉</div>${esc(r.error || 'Connect your email first.')}</div>`; return; }
+    $('#tag-inbox').textContent = r.messages.length;
+    if (!r.messages.length) { box.innerHTML = '<div class="empty"><div class="big">✉</div>Nothing job-related yet.</div>'; return; }
+    const chip = k => k === 'interview' ? 'ok' : k === 'rejection' ? 'bad' : k === 'acknowledgement' ? 'pink' : 'warn';
+    box.innerHTML = r.messages.map(m => `<div class="dl">
+      <div class="what">
+        <b>${esc(m.subject || '(no subject)')}</b>
+        <span><span class="chip ${chip(m.kind)}">${esc(m.kind)}</span> ${esc(m.from)} · ${esc(m.snippet)}</span>
+      </div>
+    </div>`).join('');
+  } catch (e) { if (box) box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+if ($('#btn-inbox-refresh')) $('#btn-inbox-refresh').onclick = refreshInbox;
+
 /* ---------- boot ---------- */
 async function refreshAll() {
-  await Promise.all([loadStats(), loadJobs(), loadApps(), loadSources(), loadCerts()]);
+  await Promise.all([loadStats(), loadJobs(), loadApps(), loadSources(), loadCerts(), emailStatus(), loadGaps()]);
 }
 
 (async function boot() {
-  loadProfile();
   renderCerts();
   renderFiles('#resume-list', 'resumes');
   renderFiles('#doc-list', 'documents');
