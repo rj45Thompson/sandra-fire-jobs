@@ -333,3 +333,12 @@ td.wrap-cell{white-space:normal; min-width:210px}
 .chat.mini{height:auto; min-height:0}
 .chat.mini .msgs{max-height:260px; min-height:96px; padding-bottom:12px}
 .chat.mini .msg{max-width:88%}
+
+/* upgrade suggestions */
+.ideas{display:flex; flex-wrap:wrap; gap:9px}
+.idea{
+  all:unset; cursor:pointer; font-family:var(--body); font-size:13.5px;
+  padding:9px 15px; border-radius:99px; border:1.5px solid var(--line);
+  background:var(--cream); color:var(--ink); transition:.15s;
+}
+.idea:hover{border-color:var(--pink); background:var(--pink-wash); color:var(--pink-deep)}

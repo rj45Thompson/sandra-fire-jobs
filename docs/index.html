@@ -34,6 +34,7 @@
       <button data-panel="jobs"><span class="ico">◎</span><span class="lbl">Jobs</span><span class="tag" id="tag-jobs">0</span></button>
       <button data-panel="apps"><span class="ico">✈</span><span class="lbl">Applications</span><span class="tag" id="tag-apps">0</span></button>
       <button data-panel="chat"><span class="ico">✿</span><span class="lbl">Chat</span></button>
+      <button data-panel="upgrade"><span class="ico">✧</span><span class="lbl">Upgrade me</span></button>
     </nav>
 
     <div class="rail-foot">
@@ -84,6 +85,20 @@
           <div class="stat p2"><div class="n" id="s-sent">—</div><div class="l">Submitted</div></div>
           <div class="stat p3"><div class="n" id="s-soon">—</div><div class="l">Closing soon</div></div>
           <div class="stat p4"><div class="n" id="s-reply">—</div><div class="l">Replies</div></div>
+        </div>
+
+        <div class="card" style="margin-bottom:18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <h3 style="margin-bottom:2px">Automatic job search</h3>
+            <p class="hint" style="margin:0">Let Muster check your places to look on a schedule.</p>
+          </div>
+          <select id="scan-schedule" style="max-width:200px">
+            <option value="0">Off — only when I click Find jobs</option>
+            <option value="6">Every 6 hours</option>
+            <option value="12">Every 12 hours</option>
+            <option value="24">Once a day</option>
+          </select>
+          <span id="schedule-note" style="font-size:13px;color:var(--ink-soft)"></span>
         </div>
 
         <div class="card dash-chat" style="margin-bottom:18px">
@@ -149,6 +164,20 @@
           website never receives it.</div>
         </div>
 
+
+        <div class="card" style="margin-bottom:18px">
+          <h3>Not sure what to put?</h3>
+          <p class="hint">Ask about any field and I will tell you what employers are actually looking for.</p>
+          <div class="chat mini">
+            <div class="msgs" id="msgs-profile">
+              <div class="msg bot">Fill in what you can below. If a field is unclear, ask me - especially the nursing registration ones.</div>
+            </div>
+            <div class="composer">
+              <textarea id="chat-input-profile" placeholder="e.g. what should I put for registration status?" rows="1"></textarea>
+              <button class="btn" id="btn-send-profile">Send</button>
+            </div>
+          </div>
+        </div>
         <form id="profile-form" class="card">
           <fieldset>
             <legend>Personal details</legend>
@@ -339,6 +368,20 @@
 
       <!-- ── DOCUMENTS ── -->
       <section class="panel" id="p-docs" hidden>
+        <div class="card" style="margin-bottom:18px">
+          <h3>Ask about your documents</h3>
+          <p class="hint">What is missing, what expires soon, what a given employer will want attached.</p>
+          <div class="chat mini">
+            <div class="msgs" id="msgs-docs">
+              <div class="msg bot">Upload your resume below, then ask me what else an employer will want from you.</div>
+            </div>
+            <div class="composer">
+              <textarea id="chat-input-docs" placeholder="e.g. what documents do I still need?" rows="1"></textarea>
+              <button class="btn" id="btn-send-docs">Send</button>
+            </div>
+          </div>
+        </div>
+
         <div class="grid g2" style="margin-bottom:20px">
           <div class="card">
             <h3>Résumé</h3>
@@ -367,43 +410,59 @@
 
         <div class="card">
           <h3>Certifications</h3>
-          <p class="hint">Expiry tracking — Muster warns before anything lapses, because a lapsed cert silently disqualifies an application.</p>
-          <div class="row" style="align-items:end;margin-bottom:16px">
-            <div class="field" style="margin:0"><label>Certification</label>
-              <select id="cert-name">
-                <option>NFPA 1001 Level I</option><option>NFPA 1001 Level II</option>
-                <option>NFPA 1002 Driver/Operator</option><option>NFPA 1072 HazMat Awareness</option>
-                <option>NFPA 1072 HazMat Operations</option><option>NFPA 1006 Rescue</option>
-                <option>Emergency Medical Responder (EMR)</option><option>Primary Care Paramedic (PCP)</option>
-                <option>Standard First Aid + CPR-C</option><option>ICS 100</option><option>ICS 200</option>
-                <option>S-100 Wildland</option><option>S-185 Wildland</option>
-                <option>H2S Alive</option><option>Confined Space</option>
-                <option disabled>&mdash; healthcare &mdash;</option>
-                <option>Health Care Aide certificate</option>
-                <option>Basic Life Support (BLS)</option>
-                <option>Nursing degree / diploma</option>
-                <option>LPN registration (CLPNA)</option>
-                <option>RN registration (CRNA)</option>
-                <option>Medication Aide</option>
-                <option>Non-Violent Crisis Intervention</option>
-                <option>WHMIS</option>
-                <option disabled>&mdash; general &mdash;</option>
-                <option>Food Safety</option><option>Class 4 licence</option>
-                <option>Security licence</option><option>Other</option>
-              </select></div>
-            <div class="field" style="margin:0"><label>Status</label>
-              <select id="cert-status"><option>Complete</option><option>In progress</option><option>Partial</option><option>Expired</option></select></div>
-            <div class="field" style="margin:0"><label>Expires</label><input type="date" id="cert-expiry"></div>
-            <button class="btn" id="btn-add-cert" type="button">Add</button>
-          </div>
+          <p class="hint">Lifted automatically from your résumé. Upload it above and these fill in. You can still add anything the parser missed.</p>
           <div id="cert-list">
-            <div class="empty"><div class="big">❋</div>No certifications recorded yet.</div>
+            <div class="empty"><div class="big">❋</div>Upload your résumé and your certifications appear here.</div>
           </div>
+          <details style="margin-top:16px">
+            <summary style="cursor:pointer;color:var(--pink-deep);font-weight:600;font-size:13.5px">Add one manually</summary>
+            <div class="row" style="align-items:end;margin-top:14px">
+              <div class="field" style="margin:0"><label>Certification</label>
+                <input type="text" id="cert-name" placeholder="e.g. NFPA 1001 Level II"></div>
+              <div class="field" style="margin:0"><label>Status</label>
+                <select id="cert-status"><option>Complete</option><option>In progress</option><option>Partial</option><option>Expired</option></select></div>
+              <div class="field" style="margin:0"><label>Expires</label><input type="date" id="cert-expiry"></div>
+              <button class="btn" id="btn-add-cert" type="button">Add</button>
+            </div>
+          </details>
         </div>
       </section>
 
       <!-- ── JOBS ── -->
       <section class="panel" id="p-jobs" hidden>
+        <div class="card" style="margin-bottom:18px">
+          <h3>Ask about jobs</h3>
+          <p class="hint">Which employers are worth it, what they need, when they open.</p>
+          <div class="chat mini">
+            <div class="msgs" id="msgs-jobs">
+              <div class="msg bot">Ask me who is hiring, what a posting really requires, or whether something is worth applying to.</div>
+            </div>
+            <div class="composer">
+              <textarea id="chat-input-jobs" placeholder="e.g. which of these should I apply to first?" rows="1"></textarea>
+              <button class="btn" id="btn-send-jobs">Send</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:18px">
+          <h3>Places to look</h3>
+          <p class="hint">Add any careers page, job board or employer site. Muster will watch it for new postings.</p>
+          <div class="row" style="align-items:end">
+            <div class="field" style="margin:0"><label>Name</label>
+              <input type="text" id="src-name" placeholder="e.g. LinkedIn - nursing Alberta"></div>
+            <div class="field" style="margin:0;flex:2"><label>Web address</label>
+              <input type="text" id="src-url" placeholder="https://..."></div>
+            <div class="field" style="margin:0"><label>Track</label>
+              <select id="src-kind">
+                <option value="fire">Fire</option>
+                <option value="healthcare">Healthcare</option>
+                <option value="general">Any job</option>
+              </select></div>
+            <button class="btn" id="btn-add-src" type="button">Add</button>
+          </div>
+          <div id="src-list" style="margin-top:14px"></div>
+        </div>
+
         <div class="banner">
           <span class="bi">◎</span>
           <div><b>Every employer, watched</b>
@@ -448,6 +507,49 @@
                 No applications yet.</div></td></tr>
             </tbody>
           </table>
+        </div>
+      </section>
+
+
+      <!-- ── UPGRADE ── -->
+      <section class="panel" id="p-upgrade" hidden>
+        <div class="banner pink">
+          <span class="bi">✧</span>
+          <div><b>Change how this app looks and reads</b>
+          Describe what you want and it rewrites its own page. A backup is kept
+          every time, so nothing is ever one-way.</div>
+        </div>
+
+        <div class="card" style="margin-bottom:18px">
+          <h3>Try one of these</h3>
+          <p class="hint">Click to load it into the box, then send.</p>
+          <div class="ideas">
+            <button class="idea" type="button">Change the theme to deep blues and gold instead of pink</button>
+            <button class="idea" type="button">Make the text bigger and easier to read</button>
+            <button class="idea" type="button">Give it a calm, minimal look with lots of white space</button>
+            <button class="idea" type="button">Make it warmer and softer, rounder corners</button>
+            <button class="idea" type="button">Use a dark theme by default</button>
+            <button class="idea" type="button">Make the buttons and cards flatter and more modern</button>
+            <button class="idea" type="button">Change the welcome message to something shorter</button>
+            <button class="idea" type="button">Make it look like a firefighter app, reds and blacks</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Tell it what to change</h3>
+          <p class="hint">Plain English. It edits the page's own stylesheet, or its wording if that is what you asked for.</p>
+          <div class="chat mini">
+            <div class="msgs" id="msgs-upgrade">
+              <div class="msg bot">Describe any change to how this app looks or reads, and I will rewrite my own page to match. If you dislike the result, say "undo" and I will put it back.</div>
+            </div>
+            <div class="composer">
+              <textarea id="chat-input-upgrade" placeholder="e.g. change the theme to something calmer…" rows="1"></textarea>
+              <button class="btn" id="btn-send-upgrade">Change it</button>
+            </div>
+          </div>
+          <div style="margin-top:14px;display:flex;gap:10px">
+            <button class="btn quiet" id="btn-undo-upgrade" type="button">Undo last change</button>
+          </div>
         </div>
       </section>
 

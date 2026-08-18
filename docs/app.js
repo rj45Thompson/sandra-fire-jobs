@@ -52,6 +52,7 @@ const TITLES = {
   jobs:   ['Jobs', 'Every employer, watched'],
   apps:   ['Applications', 'Submitted, in review, and replies'],
   chat:   ['Chat', 'Ask anything about the search'],
+  upgrade: ['Upgrade me', 'Change how this app looks and reads'],
 };
 
 $('#nav').addEventListener('click', e => {
@@ -165,12 +166,18 @@ function updateProfileTag() {
 PFORM.addEventListener('input', updateProfileTag);
 
 /* ---------- certifications ---------- */
+async function loadCerts() {
+  if (ONLINE) { try { LS.set('certs', await api('/certs')); } catch {} }
+  renderCerts();
+}
+
 function renderCerts() {
   const certs = LS.get('certs', []);
   const box = $('#cert-list');
   $('#tag-docs').textContent = certs.length;
+  if (!box) return;
   if (!certs.length) {
-    box.innerHTML = '<div class="empty"><div class="big">❋</div>No certifications recorded yet.</div>';
+    box.innerHTML = '<div class="empty"><div class="big">❋</div>Upload your résumé and your certifications appear here.</div>';
     return;
   }
   const now = Date.now(), DAY = 864e5;
@@ -183,16 +190,18 @@ function renderCerts() {
            :                 `<span class="chip ok">valid ${days}d</span>`;
     }
     const st = c.status === 'Complete' ? 'ok' : c.status === 'Expired' ? 'bad' : 'warn';
+    const from = c.source === 'resume' ? '<span class="chip pink">from résumé</span>' : '';
     return `<div class="dl">
       <div class="what">
         <b>${esc(c.name)}</b>
-        <span><span class="chip ${st}">${esc(c.status)}</span> ${chip}</span>
+        <span><span class="chip ${st}">${esc(c.status)}</span> ${chip} ${from}</span>
       </div>
-      <button class="btn quiet" style="padding:6px 13px;font-size:12.5px" data-del="${i}">Remove</button>
+      <button class="btn quiet" style="padding:6px 13px;font-size:12.5px" data-del="${c.id ?? i}">Remove</button>
     </div>`;
   }).join('');
-  $$('[data-del]', box).forEach(b => b.onclick = () => {
-    const c = LS.get('certs', []); c.splice(+b.dataset.del, 1); LS.set('certs', c); renderCerts();
+  $$('[data-del]', box).forEach(b => b.onclick = async () => {
+    if (ONLINE) { try { await api('/certs/delete', { method: 'POST', body: JSON.stringify({ id: +b.dataset.del }) }); } catch {} }
+    await loadCerts();
   });
 }
 
@@ -228,11 +237,15 @@ function wireDrop(zoneSel, inputSel, kind, listSel) {
       if (ONLINE) {
         try {
           const b64 = await toB64(f);
-          await api('/upload', {
+          const res = await api('/upload', {
             method: 'POST',
             body: JSON.stringify({ kind, filename: f.name, content_b64: b64 }),
           });
           list[list.length - 1].uploaded = true;
+          if (kind === 'resumes' && res.lifted_certs) {
+            await loadCerts();
+            alert(`Read your résumé and added ${res.lifted_certs} certification${res.lifted_certs === 1 ? '' : 's'}. Check the Certifications list.`);
+          }
         } catch (err) { console.warn('upload failed', err); }
       }
     }
@@ -309,12 +322,21 @@ function renderJobs() {
 $('#job-filter').addEventListener('input', renderJobs);
 
 async function scan() {
-  if (!ONLINE) { alert('Connect the local engine first — click Connect in the sidebar.'); return; }
+  if (!ONLINE) { alert('The engine is not running yet. Open the app at http://127.0.0.1:8770.'); return; }
   const btns = [$('#btn-scan'), $('#btn-scan2')];
   btns.forEach(b => b && (b.disabled = true, b.textContent = 'Scanning…'));
   try {
-    await api('/scan', { method: 'POST', body: '{}' });
+    const r = await api('/scan', { method: 'POST', body: '{}' });
     await loadJobs(); await loadStats();
+    if ((r.employers || 0) === 0 && (r.custom_sources || 0) === 0) {
+      alert('There is nowhere to look yet. Go to the Jobs tab and add a place — a careers page, LinkedIn, Indeed, or any employer site — then try again.');
+      show('jobs');
+    } else if (r.new === 0) {
+      alert(`Checked ${r.checked} place${r.checked === 1 ? '' : 's'} — no new postings this time.` +
+            (r.skipped_by_robots ? ` (${r.skipped_by_robots} skipped: they don't allow automated checking.)` : ''));
+    } else {
+      alert(`Found ${r.new} new lead${r.new === 1 ? '' : 's'} across ${r.checked} place${r.checked === 1 ? '' : 's'}.`);
+    }
   } catch (e) { alert('Scan failed: ' + e.message); }
   btns.forEach(b => b && (b.disabled = false, b.textContent = 'Find jobs'));
 }
@@ -326,6 +348,121 @@ $('#btn-seed').onclick = async () => {
   try { const r = await api('/employers/seed', { method: 'POST', body: '{}' });
         alert(`Loaded ${r.count} employers.`); await loadJobs(); }
   catch (e) { alert('Failed: ' + e.message); }
+};
+
+/* ---------- scan schedule ---------- */
+if ($('#scan-schedule')) {
+  const sel = $('#scan-schedule');
+  sel.value = LS.get('scanEvery', '0');
+  const note = () => {
+    const h = +sel.value;
+    $('#schedule-note').textContent = h
+      ? `On — next automatic check about ${h}h after the last one.`
+      : '';
+  };
+  note();
+  sel.onchange = async () => {
+    LS.set('scanEvery', sel.value);
+    note();
+    if (ONLINE) { try { await api('/schedule', { method: 'POST', body: JSON.stringify({ hours: +sel.value }) }); } catch {} }
+  };
+  // client-side timer as well, so it runs while the page is open
+  setInterval(() => {
+    const h = +LS.get('scanEvery', '0');
+    if (!h || !ONLINE) return;
+    const last = +LS.get('lastScan', '0');
+    if (Date.now() - last > h * 3600e3) { LS.set('lastScan', Date.now()); scan(); }
+  }, 60000);
+}
+
+/* ---------- self-upgrade ---------- */
+$$('.idea').forEach(b => b.onclick = () => {
+  const t = $('#chat-input-upgrade');
+  t.value = b.textContent.trim();
+  t.focus();
+  t.style.height = 'auto';
+  t.style.height = Math.min(t.scrollHeight, 190) + 'px';
+});
+
+const UPGRADE_BOX = { msgs: '#msgs-upgrade', input: '#chat-input-upgrade',
+                      send: '#btn-send-upgrade', ctx: 'upgrade' };
+
+async function runUpgrade(text) {
+  addMsg('me', text, UPGRADE_BOX);
+  const inp = $('#chat-input-upgrade');
+  if (inp) { inp.value = ''; inp.style.height = 'auto'; }
+
+  if (!ONLINE) { addMsg('bot', 'The engine is not running, so I cannot edit myself yet.', UPGRADE_BOX); return; }
+
+  if (/^\s*undo\b/i.test(text)) return undoUpgrade();
+
+  addPending(UPGRADE_BOX);
+  try {
+    const r = await api('/upgrade', { method: 'POST', body: JSON.stringify({ request: text }) });
+    if (r.error) { setBotText(r.error, UPGRADE_BOX); return; }
+    setBotText(`${r.message}\n\nReloading…`, UPGRADE_BOX);
+    setTimeout(() => location.reload(), 1800);
+  } catch (e) { setBotText('Could not change it: ' + e.message, UPGRADE_BOX); }
+}
+
+async function undoUpgrade() {
+  if (!ONLINE) return;
+  addPending(UPGRADE_BOX);
+  try {
+    const r = await api('/upgrade/undo', { method: 'POST', body: '{}' });
+    setBotText(r.error || `${r.message}\n\nReloading…`, UPGRADE_BOX);
+    if (!r.error) setTimeout(() => location.reload(), 1800);
+  } catch (e) { setBotText('Could not undo: ' + e.message, UPGRADE_BOX); }
+}
+
+if ($('#btn-send-upgrade')) {
+  $('#btn-send-upgrade').onclick = () => {
+    const t = $('#chat-input-upgrade').value.trim();
+    if (t) runUpgrade(t);
+  };
+  $('#chat-input-upgrade').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const t = e.target.value.trim();
+      if (t) runUpgrade(t);
+    }
+  });
+}
+if ($('#btn-undo-upgrade')) $('#btn-undo-upgrade').onclick = undoUpgrade;
+
+/* ---------- custom sources ---------- */
+async function loadSources() {
+  const box = $('#src-list');
+  if (!box) return;
+  let list = LS.get('sources', []);
+  if (ONLINE) { try { list = await api('/sources'); LS.set('sources', list); } catch {} }
+  if (!list.length) {
+    box.innerHTML = '<div class="empty" style="padding:22px"><div class="big">◎</div>' +
+                    'No custom places yet. Add LinkedIn, Indeed, or any employer page above.</div>';
+    return;
+  }
+  box.innerHTML = list.map((s, i) => `<div class="dl">
+    <div class="what"><b>${esc(s.name)}</b>
+      <span><span class="chip pink">${esc(s.kind || 'general')}</span>
+      <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url).slice(0, 62)}</a></span>
+    </div>
+    <button class="btn quiet" style="padding:6px 13px;font-size:12.5px" data-src="${s.id ?? i}">Remove</button>
+  </div>`).join('');
+  $$('[data-src]', box).forEach(b => b.onclick = async () => {
+    if (ONLINE) { try { await api('/sources/delete', { method: 'POST', body: JSON.stringify({ id: +b.dataset.src }) }); } catch {} }
+    const l = LS.get('sources', []).filter((x, i) => String(x.id ?? i) !== b.dataset.src);
+    LS.set('sources', l); loadSources();
+  });
+}
+
+if ($('#btn-add-src')) $('#btn-add-src').onclick = async () => {
+  const name = $('#src-name').value.trim(), url = $('#src-url').value.trim();
+  if (!name || !url) { alert('Give it a name and a web address.'); return; }
+  const rec = { name, url: /^https?:/.test(url) ? url : 'https://' + url, kind: $('#src-kind').value };
+  if (ONLINE) { try { await api('/sources', { method: 'POST', body: JSON.stringify(rec) }); } catch (e) { alert('Could not save: ' + e.message); } }
+  else { const l = LS.get('sources', []); l.push(rec); LS.set('sources', l); }
+  $('#src-name').value = ''; $('#src-url').value = '';
+  loadSources();
 };
 
 /* ---------- applications ---------- */
@@ -377,13 +514,16 @@ async function loadStats() {
 /* Two boxes - one on the dashboard, one on the Chat panel - sharing a
    single conversation, so a question asked in either appears in both. */
 const BOXES = [
-  { msgs: '#msgs',      input: '#chat-input',      send: '#btn-send' },
-  { msgs: '#msgs-mini', input: '#chat-input-mini', send: '#btn-send-mini' },
+  { msgs: '#msgs',         input: '#chat-input',         send: '#btn-send',         ctx: 'general'   },
+  { msgs: '#msgs-mini',    input: '#chat-input-mini',    send: '#btn-send-mini',    ctx: 'general'   },
+  { msgs: '#msgs-jobs',    input: '#chat-input-jobs',    send: '#btn-send-jobs',    ctx: 'jobs'      },
+  { msgs: '#msgs-docs',    input: '#chat-input-docs',    send: '#btn-send-docs',    ctx: 'documents' },
+  { msgs: '#msgs-profile', input: '#chat-input-profile', send: '#btn-send-profile', ctx: 'profile'   },
 ];
 
-function addMsg(role, text) {
+function addMsg(role, text, only) {
   let last = null;
-  BOXES.forEach(b => {
+  (only ? [only] : BOXES).forEach(b => {
     const box = $(b.msgs);
     if (!box) return;
     const d = document.createElement('div');
@@ -396,8 +536,8 @@ function addMsg(role, text) {
   return last;
 }
 
-function setBotText(text) {
-  BOXES.forEach(b => {
+function setBotText(text, only) {
+  (only ? [only] : BOXES).forEach(b => {
     const box = $(b.msgs);
     if (!box) return;
     const pending = box.querySelector('.msg.bot.pending');
@@ -406,8 +546,8 @@ function setBotText(text) {
   });
 }
 
-function addPending() {
-  BOXES.forEach(b => {
+function addPending(only) {
+  (only ? [only] : BOXES).forEach(b => {
     const box = $(b.msgs);
     if (!box) return;
     const d = document.createElement('div');
@@ -426,55 +566,60 @@ BOXES.forEach(b => {
     input.style.height = Math.min(input.scrollHeight, 190) + 'px';
   });
   input.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input, b); }
   });
   btn.onclick = () => send(input);
 });
 
-async function send(input) {
+async function send(input, box) {
   const text = input.value.trim();
   if (!text) return;
-  addMsg('me', text);
-  BOXES.forEach(b => { const i = $(b.input); if (i) { i.value = ''; i.style.height = 'auto'; } });
+  const ctx = box ? box.ctx : 'general';
+  addMsg('me', text, box);
+  const i = $(box.input); if (i) { i.value = ''; i.style.height = 'auto'; }
 
-  const log = LS.get('chatlog', []);
-  log.push({ role: 'user', text, at: new Date().toISOString() });
-  LS.set('chatlog', log);
+  // Each context keeps its own short history, so the Jobs chat and the
+  // Documents chat never bleed into each other.
+  const key = 'chatlog.' + ctx;
+  const log = LS.get(key, []);
+  log.push({ role: 'user', text });
+  LS.set(key, log.slice(-12));
 
   if (!ONLINE) {
-    addMsg('bot', `The local engine is not running, so I cannot answer yet.
-
-Start it with:
-  py backend/server.py
-
-then click Connect in the sidebar. Your message is saved and will still be here.`);
+    addMsg('bot', 'The engine is not running yet. Open the app at http://127.0.0.1:8770', box);
     return;
   }
 
-  addPending();
+  addPending(box);
   try {
     const r = await api('/chat', {
       method: 'POST',
-      body: JSON.stringify({ message: text, history: log.slice(-20) }),
+      body: JSON.stringify({ message: text, history: log.slice(-8), context: ctx }),
     });
-    setBotText(r.reply || '(no reply)');
-    log.push({ role: 'assistant', text: r.reply, at: new Date().toISOString() });
-    LS.set('chatlog', log);
+    setBotText(r.reply || '(no reply)', box);
+    const l2 = LS.get(key, []);
+    l2.push({ role: 'assistant', text: r.reply });
+    LS.set(key, l2.slice(-12));
   } catch (e) {
-    setBotText('Engine error: ' + e.message);
+    setBotText('Engine error: ' + e.message, box);
   }
 }
 
 function restoreChat() {
-  const log = LS.get('chatlog', []);
-  if (!log.length) return;
-  BOXES.forEach(b => { const box = $(b.msgs); if (box) box.innerHTML = ''; });
-  log.slice(-40).forEach(m => addMsg(m.role === 'user' ? 'me' : 'bot', m.text));
+  // restore each context's own history into its own boxes
+  BOXES.forEach(b => {
+    const log = LS.get('chatlog.' + b.ctx, []);
+    if (!log.length) return;
+    const box = $(b.msgs);
+    if (!box) return;
+    box.innerHTML = '';
+    log.slice(-20).forEach(m => addMsg(m.role === 'user' ? 'me' : 'bot', m.text, b));
+  });
 }
 
 /* ---------- boot ---------- */
 async function refreshAll() {
-  await Promise.all([loadStats(), loadJobs(), loadApps()]);
+  await Promise.all([loadStats(), loadJobs(), loadApps(), loadSources(), loadCerts()]);
 }
 
 (async function boot() {
@@ -483,6 +628,7 @@ async function refreshAll() {
   renderFiles('#resume-list', 'resumes');
   renderFiles('#doc-list', 'documents');
   restoreChat();
+  loadSources();
   if (await ping()) refreshAll();
   setInterval(ping, 20000);
 })();

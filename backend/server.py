@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS profile (
 CREATE TABLE IF NOT EXISTS certs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL, status TEXT, expiry TEXT,
+    source TEXT DEFAULT 'manual',   -- manual | resume
     added_at TEXT DEFAULT CURRENT_TIMESTAMP);
 
 CREATE TABLE IF NOT EXISTS employers (
@@ -114,6 +115,11 @@ CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     text TEXT, at TEXT DEFAULT CURRENT_TIMESTAMP);
 
+CREATE TABLE IF NOT EXISTS sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT, url TEXT UNIQUE, kind TEXT,
+    added_at TEXT DEFAULT CURRENT_TIMESTAMP);
+
 CREATE TABLE IF NOT EXISTS chat (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     role TEXT, text TEXT, at TEXT DEFAULT CURRENT_TIMESTAMP);
@@ -127,6 +133,12 @@ def db() -> sqlite3.Connection:
         _local.conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         _local.conn.row_factory = sqlite3.Row
         _local.conn.executescript(SCHEMA)
+        # migrations: add columns that older databases lack
+        for tbl, col, decl in [("certs", "source", "TEXT DEFAULT 'manual'")]:
+            cols = [r[1] for r in _local.conn.execute(f"PRAGMA table_info({tbl})")]
+            if col not in cols:
+                _local.conn.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {decl}")
+        _local.conn.commit()
     return _local.conn
 
 
@@ -280,6 +292,80 @@ def seed_employers() -> int:
     count = cur.execute("SELECT COUNT(*) c FROM employers").fetchone()["c"]
     log_event(f"Employer registry loaded - {count} employers on watch")
     return count
+
+
+# ─────────────────────── resume parsing ────────────────────────
+# Known credentials, so the tool can lift them straight off the resume
+# instead of making her retype what is already there.
+KNOWN_CERTS = [
+    ("NFPA 1001 Level II", r"nfpa\s*1001.*(level\s*(ii|2)|firefighter\s*(ii|2))"),
+    ("NFPA 1001 Level I", r"nfpa\s*1001"),
+    ("NFPA 1002 Driver/Operator", r"nfpa\s*1002|driver[\s/-]*operator|pump\s*operator"),
+    ("NFPA 1072 HazMat", r"nfpa\s*1072|haz\s*mat|hazardous\s*materials"),
+    ("NFPA 1006 Rescue", r"nfpa\s*1006|technical\s*rescue"),
+    ("Emergency Medical Responder (EMR)", r"\bemr\b|emergency\s*medical\s*responder"),
+    ("Primary Care Paramedic (PCP)", r"\bpcp\b|primary\s*care\s*paramedic"),
+    ("Advanced Care Paramedic (ACP)", r"\bacp\b|advanced\s*care\s*paramedic"),
+    ("Registered Nurse (RN)", r"registered\s*nurse|\brn\b|bscn|\bbn\b"),
+    ("Licensed Practical Nurse (LPN)", r"licensed\s*practical\s*nurse|\blpn\b"),
+    ("Health Care Aide", r"health\s*care\s*aide|\bhca\b|care\s*aide"),
+    ("Standard First Aid + CPR-C", r"first\s*aid|\bcpr\b"),
+    ("Basic Life Support (BLS)", r"\bbls\b|basic\s*life\s*support"),
+    ("ICS 100", r"ics[\s-]*100"),
+    ("S-100 Wildland", r"\bs-?100\b"),
+    ("H2S Alive", r"h2s\s*alive"),
+    ("Confined Space", r"confined\s*space"),
+    ("WHMIS", r"whmis"),
+    ("Class 1 licence", r"class\s*1\b"),
+    ("Class 3 licence", r"class\s*3\b"),
+    ("Class 4 licence", r"class\s*4\b"),
+    ("Air brakes (Q endorsement)", r"air\s*brake|\bq\s*endorsement\b"),
+]
+
+
+def resume_text(path: Path) -> str:
+    """Best-effort plain text from a .docx, .txt or .pdf resume."""
+    suf = path.suffix.lower()
+    try:
+        if suf == ".docx":
+            import zipfile, xml.etree.ElementTree as ET
+            with zipfile.ZipFile(path) as z:
+                xml = z.read("word/document.xml").decode("utf-8", "ignore")
+            xml = re.sub(r"</w:p>", "\n", xml)
+            return re.sub(r"<[^>]+>", " ", xml)
+        if suf in (".txt", ".rtf", ".md"):
+            return path.read_text(encoding="utf-8", errors="ignore")
+        if suf == ".pdf":
+            raw = path.read_bytes().decode("latin-1", "ignore")
+            # crude but dependency-free: pull text between BT/ET or parens
+            chunks = re.findall(r"\(([^)]{2,})\)", raw)
+            return " ".join(chunks)
+    except (OSError, KeyError, ValueError):
+        pass
+    return ""
+
+
+def lift_certs_from_resume(path: Path) -> int:
+    text = resume_text(path)
+    if not text:
+        return 0
+    low = text.lower()
+    found = 0
+    for name, pat in KNOWN_CERTS:
+        if re.search(pat, low):
+            # do not duplicate one already recorded
+            exists = db().execute(
+                "SELECT 1 FROM certs WHERE name=?", (name,)).fetchone()
+            if exists:
+                continue
+            db().execute(
+                "INSERT INTO certs (name,status,source) VALUES (?,?,'resume')",
+                (name, "On resume"))
+            found += 1
+    if found:
+        db().commit()
+        log_event(f"Lifted {found} certifications from the resume")
+    return found
 
 
 # ─────────────────────── match scoring ─────────────────────────
@@ -443,6 +529,10 @@ class Handler(BaseHTTPRequestHandler):
                 ORDER BY a.id DESC""").fetchall()
             return self._send([dict(r) for r in rows])
 
+        if p == "/sources":
+            return self._send([dict(r) for r in
+                               db().execute("SELECT * FROM sources ORDER BY id DESC")])
+
         if p == "/stats":
             return self._send(self._stats())
 
@@ -482,7 +572,43 @@ class Handler(BaseHTTPRequestHandler):
                          (kind, fname, str(target)))
             db().commit()
             log_event(f"Document stored: {fname}")
-            return self._send({"ok": True, "path": str(target)})
+            lifted = lift_certs_from_resume(target) if kind == "resumes" else 0
+            return self._send({"ok": True, "path": str(target), "lifted_certs": lifted})
+
+        if p == "/sources":
+            try:
+                db().execute(
+                    "INSERT OR IGNORE INTO sources (name,url,kind) VALUES (?,?,?)",
+                    (b.get("name"), b.get("url"), b.get("kind", "general")))
+                db().commit()
+            except sqlite3.Error as e:
+                return self._send({"error": str(e)}, 400)
+            log_event(f"Watching a new place: {b.get('name')}")
+            return self._send({"ok": True})
+
+        if p == "/certs/delete":
+            db().execute("DELETE FROM certs WHERE id=?", (b.get("id"),))
+            db().commit()
+            return self._send({"ok": True})
+
+        if p == "/schedule":
+            hrs = int(b.get("hours", 0) or 0)
+            db().execute("INSERT INTO profile (key,value) VALUES ('scan_every_hours',?) "
+                         "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(hrs),))
+            db().commit()
+            log_event(f"Automatic job search set to every {hrs}h" if hrs else "Automatic job search turned off")
+            return self._send({"ok": True, "hours": hrs})
+
+        if p == "/sources/delete":
+            db().execute("DELETE FROM sources WHERE id=?", (b.get("id"),))
+            db().commit()
+            return self._send({"ok": True})
+
+        if p == "/upgrade":
+            return self._send(self._upgrade(b.get("request", "")))
+
+        if p == "/upgrade/undo":
+            return self._send(self._upgrade_undo())
 
         if p == "/employers/seed":
             return self._send({"ok": True, "count": seed_employers()})
@@ -492,7 +618,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if p == "/chat":
             return self._send({"reply": self._chat(b.get("message", ""),
-                                                   b.get("history", []))})
+                                                   b.get("history", []),
+                                                   b.get("context", "general"))})
 
         return self._send({"error": "not found"}, 404)
 
@@ -543,6 +670,8 @@ class Handler(BaseHTTPRequestHandler):
         found = 0
         checked = 0
         skipped = 0
+        total = db().execute("SELECT COUNT(*) c FROM employers").fetchone()["c"]
+        custom = db().execute("SELECT COUNT(*) c FROM sources").fetchone()["c"]
         pat = re.compile(r"fire\s*fighter|firefighter|fire\s+services|emergency\s+response",
                          re.I)
 
@@ -565,6 +694,15 @@ class Handler(BaseHTTPRequestHandler):
                 db().commit()
             except (json.JSONDecodeError, KeyError, sqlite3.Error):
                 pass
+        for src in db().execute("SELECT * FROM sources").fetchall():
+            db().execute(
+                """INSERT OR IGNORE INTO employers
+                   (name, kind, city, province, careers_url, ats, hires, notes)
+                   VALUES (?,?,?,?,?,?,?,?)""",
+                (src["name"], src["kind"] or "general", "-", "-",
+                 src["url"], "custom", "varies", "Added by you as a place to look."))
+        db().commit()
+
         for e in db().execute("SELECT * FROM employers").fetchall():
             url = e["careers_url"]
             if not url:
@@ -594,9 +732,77 @@ class Handler(BaseHTTPRequestHandler):
                 pass
         db().commit()
         log_event(f"Scan complete - {checked} sources checked, {found} new leads, {skipped} skipped (robots.txt)")
-        return {"ok": True, "checked": checked, "new": found, "skipped_by_robots": skipped}
+        return {"ok": True, "checked": checked, "new": found,
+                "skipped_by_robots": skipped, "employers": total, "custom_sources": custom}
 
-    def _chat(self, message: str, history: list) -> str:
+    EDITABLE = {"styles.css", "index.html"}
+
+    def _upgrade(self, request: str) -> dict:
+        """
+        Let the assistant rewrite its own front-end.
+
+        Only the two files that define how the page looks and reads are in
+        scope, a timestamped backup is taken first, and the result must still
+        look like the right kind of file before it is written.
+        """
+        if not request.strip():
+            return {"error": "Say what you would like changed."}
+
+        target = "index.html" if re.search(
+            r"\b(text|word|label|button|tab|section|wording|copy|say|title)\b",
+            request, re.I) else "styles.css"
+        src = WEB_DIR / target
+        current = src.read_text(encoding="utf-8")
+
+        backup_dir = DATA / "upgrade_backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        (backup_dir / f"{stamp}-{target}").write_text(current, encoding="utf-8")
+
+        brief = (
+            "You are editing the front-end of a personal job-search app called "
+            "Muster, used by one person, Sandra.\n\n"
+            f"Rewrite the file {target} to satisfy this request:\n{request}\n\n"
+            "Rules:\n"
+            "- Output ONLY the complete new file contents. No commentary, no "
+            "markdown fences.\n"
+            "- Keep every id, class name and data attribute that already exists, "
+            "or the app stops working.\n"
+            "- Keep it accessible and readable in both light and dark mode.\n"
+            "- If the request is vague, make a tasteful choice rather than asking."
+        )
+        try:
+            new = _chat_claude_cli(brief, [], current)
+        except (RuntimeError, OSError) as e:
+            return {"error": f"Could not reach the assistant: {e}"}
+
+        new = re.sub(r"^```[a-zA-Z]*\n|```\s*$", "", new.strip())
+
+        ok = ("<html" in new.lower() and "</html>" in new.lower()) if target == "index.html" \
+             else ("{" in new and "}" in new and "--" in new)
+        if not ok or len(new) < 400:
+            return {"error": "The rewrite did not look like a valid file, so "
+                             "nothing was changed."}
+
+        src.write_text(new, encoding="utf-8")
+        log_event(f"Front-end upgraded: {request[:70]}")
+        return {"ok": True, "file": target, "bytes": len(new),
+                "backup": f"{stamp}-{target}",
+                "message": f"Updated {target}. Reload the page to see it."}
+
+    def _upgrade_undo(self) -> dict:
+        backup_dir = DATA / "upgrade_backups"
+        backups = sorted(backup_dir.glob("*"), reverse=True) if backup_dir.exists() else []
+        if not backups:
+            return {"error": "Nothing to undo."}
+        latest = backups[0]
+        target = latest.name.split("-", 2)[-1]
+        (WEB_DIR / target).write_text(latest.read_text(encoding="utf-8"), encoding="utf-8")
+        latest.unlink()
+        log_event(f"Undid the last upgrade to {target}")
+        return {"ok": True, "message": f"Reverted {target}. Reload the page."}
+
+    def _chat(self, message: str, history: list, context: str = "general") -> str:
         db().execute("INSERT INTO chat (role,text) VALUES ('user',?)", (message,))
         db().commit()
 
@@ -659,6 +865,22 @@ class Handler(BaseHTTPRequestHandler):
             f"Her certifications: {', '.join(certs) or 'none recorded yet'}\n"
             f"Currently tracked openings: {'; '.join(open_jobs) or 'none scanned yet'}"
         )
+
+        FOCUS = {
+            "jobs": ("The user is looking at the JOBS tab. Talk about employers, "
+                     "postings, deadlines and whether something is worth applying "
+                     "to. Be blunt about odds and about residency rules, which "
+                     "disqualify more paid-on-call applicants than certificates do."),
+            "documents": ("The user is looking at the DOCUMENTS tab. Talk about "
+                          "resumes, certificates, expiry dates, driver abstracts, "
+                          "record checks and what a given employer will want "
+                          "attached. Tell her what is missing."),
+            "profile": ("The user is looking at the PROFILE form and may be asking "
+                        "what to put in a field. Answer briefly and concretely, and "
+                        "say what employers actually do with that answer."),
+        }
+        if context in FOCUS:
+            system += "\n\n" + FOCUS[context]
 
         provider = ENV.get("CHAT_PROVIDER", "ollama").lower()
         try:
