@@ -575,6 +575,9 @@ class Handler(BaseHTTPRequestHandler):
             lifted = lift_certs_from_resume(target) if kind == "resumes" else 0
             return self._send({"ok": True, "path": str(target), "lifted_certs": lifted})
 
+        if p == "/sources/chat":
+            return self._send(self._sources_chat(b.get("message", "")))
+
         if p == "/sources":
             try:
                 db().execute(
@@ -736,6 +739,64 @@ class Handler(BaseHTTPRequestHandler):
                 "skipped_by_robots": skipped, "employers": total, "custom_sources": custom}
 
     EDITABLE = {"styles.css", "index.html"}
+
+    def _sources_chat(self, message: str) -> dict:
+        """
+        Turn plain English - "LinkedIn nursing jobs in Alberta" - into an
+        actual source and add it. She never types a web address.
+        """
+        system = (
+            "You help Sandra choose PLACES to look for work and add them to "
+            "her job-search tool. She lives near Onoway, Alberta. She is "
+            "interested in fire service and healthcare work, and general jobs "
+            "too.\n\n"
+            "When she names somewhere to look, reply in ONE short friendly "
+            "sentence, then on a NEW LINE output a JSON object of what to add:\n"
+            '{\"add\":[{\"name\":\"LinkedIn - nursing, Alberta\",'
+            '\"url\":\"https://www.linkedin.com/jobs/search/?keywords=nurse&location=Alberta%2C%20Canada\",'
+            '\"kind\":\"healthcare\"}]}\n\n'
+            "Rules:\n"
+            "- Give REAL, working URLs in the site's normal job-search format. "
+            "Never invent a domain. For big sites use their real search URLs "
+            "(LinkedIn, Indeed, Job Bank, AHS careers, a city careers page).\n"
+            "- kind is exactly one of: fire, healthcare, general.\n"
+            "- If she asks a broad 'where should I look' question, suggest two "
+            "to four good places and put them all in the JSON.\n"
+            "- The JSON goes on its own line, no code fences."
+        )
+        try:
+            raw = _chat_claude_cli(system, [], message)
+        except (RuntimeError, OSError) as e:
+            return {"reply": f"I could not reach the assistant ({e}).", "added": []}
+
+        reply, added = raw.strip(), []
+        m = re.search(r"\{[\s\S]*\}", raw)
+        if m:
+            try:
+                data = json.loads(m.group(0))
+            except json.JSONDecodeError:
+                data = None
+            if isinstance(data, dict) and "add" in data:
+                reply = raw[:m.start()].strip() or "Done - added below."
+                for src in data.get("add", []):
+                    url = str(src.get("url", "")).strip()
+                    if not url.startswith("http"):
+                        continue
+                    name = str(src.get("name") or url).strip()
+                    kind = src.get("kind", "general")
+                    if kind not in ("fire", "healthcare", "general"):
+                        kind = "general"
+                    try:
+                        db().execute(
+                            "INSERT OR IGNORE INTO sources (name,url,kind) VALUES (?,?,?)",
+                            (name, url, kind))
+                        added.append({"name": name, "url": url, "kind": kind})
+                    except sqlite3.Error:
+                        pass
+                db().commit()
+                if added:
+                    log_event(f"Added {len(added)} place(s) to look, via chat")
+        return {"reply": reply, "added": added}
 
     def _upgrade(self, request: str) -> dict:
         """

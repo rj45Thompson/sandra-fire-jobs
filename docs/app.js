@@ -465,6 +465,39 @@ if ($('#btn-add-src')) $('#btn-add-src').onclick = async () => {
   loadSources();
 };
 
+/* ---------- places-to-look chat ---------- */
+const SRC_BOX = { msgs: '#msgs-sources', input: '#chat-input-sources', ctx: 'sources' };
+
+async function askSources(text) {
+  addMsg('me', text, SRC_BOX);
+  const inp = $('#chat-input-sources');
+  if (inp) { inp.value = ''; inp.style.height = 'auto'; }
+  if (!ONLINE) { addMsg('bot', 'The engine is not running yet. Open the app at http://127.0.0.1:8770', SRC_BOX); return; }
+  addPending(SRC_BOX);
+  try {
+    const r = await api('/sources/chat', { method: 'POST', body: JSON.stringify({ message: text }) });
+    let msg = r.reply || 'Done.';
+    if (r.added && r.added.length) msg += '\n\nAdded: ' + r.added.map(s => s.name).join(', ');
+    else if (!r.reply) msg = "I could not work out a place from that — try naming a site, like \"LinkedIn nursing Alberta\".";
+    setBotText(msg, SRC_BOX);
+    await loadSources();
+  } catch (e) { setBotText('Could not add: ' + e.message, SRC_BOX); }
+}
+
+if ($('#btn-send-sources')) {
+  $('#btn-send-sources').onclick = () => {
+    const t = $('#chat-input-sources').value.trim();
+    if (t) askSources(t);
+  };
+  $('#chat-input-sources').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const t = e.target.value.trim();
+      if (t) askSources(t);
+    }
+  });
+}
+
 /* ---------- applications ---------- */
 async function loadApps() {
   if (!ONLINE) return;

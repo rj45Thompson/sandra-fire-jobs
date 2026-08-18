@@ -446,20 +446,25 @@
 
         <div class="card" style="margin-bottom:18px">
           <h3>Places to look</h3>
-          <p class="hint">Add any careers page, job board or employer site. Muster will watch it for new postings.</p>
-          <div class="row" style="align-items:end">
-            <div class="field" style="margin:0"><label>Name</label>
-              <input type="text" id="src-name" placeholder="e.g. LinkedIn - nursing Alberta"></div>
-            <div class="field" style="margin:0;flex:2"><label>Web address</label>
-              <input type="text" id="src-url" placeholder="https://..."></div>
-            <div class="field" style="margin:0"><label>Track</label>
-              <select id="src-kind">
-                <option value="fire">Fire</option>
-                <option value="healthcare">Healthcare</option>
-                <option value="general">Any job</option>
-              </select></div>
-            <button class="btn" id="btn-add-src" type="button">Add</button>
+          <p class="hint">Just tell me where to look - "LinkedIn for nursing in Alberta", "Indeed for care aide near Onoway", "the City of Edmonton jobs page". I find the address and add it. No links to paste.</p>
+          <div class="chat mini">
+            <div class="msgs" id="msgs-sources">
+              <div class="msg bot">Tell me where to look and I will add it. For example: "LinkedIn for nursing in Alberta", "Job Bank firefighter jobs", "AHS careers", or "the City of Edmonton jobs page".</div>
+            </div>
+            <div class="composer">
+              <textarea id="chat-input-sources" placeholder="e.g. LinkedIn nursing jobs in Alberta…" rows="1"></textarea>
+              <button class="btn" id="btn-send-sources">Add it</button>
+            </div>
           </div>
+          <details style="margin-top:12px">
+            <summary style="cursor:pointer;color:var(--pink-deep);font-weight:600;font-size:13px">Type an address by hand instead</summary>
+            <div class="row" style="align-items:end;margin-top:12px">
+              <div class="field" style="margin:0"><label>Name</label><input type="text" id="src-name" placeholder="e.g. LinkedIn - nursing"></div>
+              <div class="field" style="margin:0;flex:2"><label>Web address</label><input type="text" id="src-url" placeholder="https://..."></div>
+              <div class="field" style="margin:0"><label>Track</label><select id="src-kind"><option value="fire">Fire</option><option value="healthcare">Healthcare</option><option value="general">Any job</option></select></div>
+              <button class="btn quiet" id="btn-add-src" type="button">Add</button>
+            </div>
+          </details>
           <div id="src-list" style="margin-top:14px"></div>
         </div>
 
