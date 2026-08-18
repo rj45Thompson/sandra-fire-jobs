@@ -133,6 +133,15 @@ def db() -> sqlite3.Connection:
     if not hasattr(_local, "conn"):
         _local.conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         _local.conn.row_factory = sqlite3.Row
+        # ThreadingHTTPServer gives every request its own thread, and every
+        # thread its own connection here. Default SQLite journal mode takes
+        # an exclusive lock for the duration of any write, which stalls every
+        # other connection - including a plain health-check GET on a totally
+        # unrelated thread - until it releases. WAL lets readers and the one
+        # writer proceed concurrently; busy_timeout means a genuine collision
+        # waits and retries instead of raising immediately.
+        _local.conn.execute("PRAGMA journal_mode=WAL")
+        _local.conn.execute("PRAGMA busy_timeout=8000")
         _local.conn.executescript(SCHEMA)
         # migrations: add columns that older databases lack
         for tbl, col, decl in [("certs", "source", "TEXT DEFAULT 'manual'")]:
@@ -1543,7 +1552,17 @@ def main() -> None:
    Ctrl-C to stop.
 """
     print(banner)
-    ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+
+    class MusterServer(ThreadingHTTPServer):
+        # A per-request thread that never finishes - a socket left half-open
+        # by a client that vanished mid-request - would otherwise sit there
+        # forever with daemon_threads unset. daemon_threads=True means Python
+        # can still exit cleanly regardless, and it costs nothing when every
+        # request completes normally, which is the overwhelmingly common case.
+        daemon_threads = True
+
+    Handler.timeout = 120   # a stalled client socket gets reclaimed, not held forever
+    MusterServer(("127.0.0.1", PORT), Handler).serve_forever()
 
 
 if __name__ == "__main__":
