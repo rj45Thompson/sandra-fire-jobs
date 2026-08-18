@@ -28,11 +28,11 @@
     </div>
 
     <nav class="nav" id="nav">
-      <button data-panel="dash"  aria-current="true"><span class="ico">◈</span><span class="lbl">Panel</span></button>
-      <button data-panel="perfil"><span class="ico">✦</span><span class="lbl">Perfil</span><span class="tag" id="tag-profile">0%</span></button>
-      <button data-panel="docs"><span class="ico">❋</span><span class="lbl">Documentos</span><span class="tag" id="tag-docs">0</span></button>
-      <button data-panel="jobs"><span class="ico">◎</span><span class="lbl">Empleos</span><span class="tag" id="tag-jobs">0</span></button>
-      <button data-panel="apps"><span class="ico">✈</span><span class="lbl">Solicitudes</span><span class="tag" id="tag-apps">0</span></button>
+      <button data-panel="dash"  aria-current="true"><span class="ico">◈</span><span class="lbl">Dashboard</span></button>
+      <button data-panel="perfil"><span class="ico">✦</span><span class="lbl">Profile</span><span class="tag" id="tag-profile">0%</span></button>
+      <button data-panel="docs"><span class="ico">❋</span><span class="lbl">Documents</span><span class="tag" id="tag-docs">0</span></button>
+      <button data-panel="jobs"><span class="ico">◎</span><span class="lbl">Jobs</span><span class="tag" id="tag-jobs">0</span></button>
+      <button data-panel="apps"><span class="ico">✈</span><span class="lbl">Applications</span><span class="tag" id="tag-apps">0</span></button>
       <button data-panel="chat"><span class="ico">✿</span><span class="lbl">Chat</span></button>
     </nav>
 
@@ -49,12 +49,12 @@
   <main class="main">
     <header class="topbar">
       <div>
-        <h2 id="page-title">Panel</h2>
-        <div class="sub" id="page-sub">Tu búsqueda de un vistazo</div>
+        <h2 id="page-title">Dashboard</h2>
+        <div class="sub" id="page-sub">Your search at a glance</div>
       </div>
       <div class="spacer"></div>
       <button class="btn quiet" id="btn-theme" title="Theme">◐</button>
-      <button class="btn" id="btn-scan">Buscar empleos</button>
+      <button class="btn" id="btn-scan">Find jobs</button>
     </header>
 
     <div class="wrap">
@@ -64,23 +64,23 @@
         <div class="banner rosa" id="setup-banner">
           <span class="bi">🌺</span>
           <div>
-            <b>Bienvenida, Sandra</b>
-            Start in <b>Perfil</b> to enter your details, then <b>Documentos</b> for your
+            <b>Welcome, Sandra</b>
+            Start in <b>Profile</b> to enter your details, then <b>Documents</b> for your
             certifications. Once the local engine is connected, Brigada watches every
             Alberta fire department for postings that match what you hold.
           </div>
         </div>
 
         <div class="grid g4" style="margin-bottom:22px">
-          <div class="stat p1"><div class="n" id="s-open">—</div><div class="l">Puestos abiertos</div></div>
-          <div class="stat p2"><div class="n" id="s-sent">—</div><div class="l">Enviadas</div></div>
-          <div class="stat p3"><div class="n" id="s-soon">—</div><div class="l">Cierran pronto</div></div>
-          <div class="stat p4"><div class="n" id="s-reply">—</div><div class="l">Respuestas</div></div>
+          <div class="stat p1"><div class="n" id="s-open">—</div><div class="l">Open postings</div></div>
+          <div class="stat p2"><div class="n" id="s-sent">—</div><div class="l">Submitted</div></div>
+          <div class="stat p3"><div class="n" id="s-soon">—</div><div class="l">Closing soon</div></div>
+          <div class="stat p4"><div class="n" id="s-reply">—</div><div class="l">Replies</div></div>
         </div>
 
         <div class="grid g2">
           <div class="card">
-            <h3>Fechas límite</h3>
+            <h3>Deadlines</h3>
             <p class="hint">Closing dates and certification expiries, soonest first.</p>
             <div id="deadlines">
               <div class="empty"><div class="big">🗓</div>Nothing tracked yet.<br><small>Connect the engine and run a scan.</small></div>
@@ -88,7 +88,7 @@
           </div>
 
           <div class="card">
-            <h3>Actividad</h3>
+            <h3>Activity</h3>
             <p class="hint">Every action the engine takes, logged.</p>
             <div id="activity">
               <div class="empty"><div class="big">✧</div>No activity yet.</div>
@@ -97,11 +97,11 @@
         </div>
 
         <div class="card" style="margin-top:18px">
-          <h3>El bloqueo — NFPA 1001 live fire</h3>
+          <h3>The blocker — NFPA 1001 live fire</h3>
           <p class="hint">The one outstanding item standing between Sandra and full certification. Tracked as a first-class blocker because most departments gate on it.</p>
           <div id="blocker">
             <div class="dl">
-              <div class="when soon">ABIERTO</div>
+              <div class="when soon">OPEN</div>
               <div class="what">
                 <b>Live fire evolutions outstanding</b>
                 <span>Knowledge and skills complete through Lac Ste. Anne County. Needs a host department or academy that accepts partial-completion candidates.</span>
@@ -122,7 +122,7 @@
 
         <form id="profile-form" class="card">
           <fieldset>
-            <legend>Datos personales</legend>
+            <legend>Personal details</legend>
             <p class="leg-hint">The identity block every application asks for.</p>
             <div class="row">
               <div class="field"><label>Legal first name <span class="req">*</span></label><input type="text" name="first_name" required></div>
@@ -154,7 +154,7 @@
           </fieldset>
 
           <fieldset>
-            <legend>Servicio actual</legend>
+            <legend>Current service</legend>
             <p class="leg-hint">Current department, rank and availability.</p>
             <div class="row">
               <div class="field"><label>Current department</label><input type="text" name="current_dept" placeholder="Lac Ste. Anne County"></div>
@@ -174,7 +174,7 @@
           </fieldset>
 
           <fieldset>
-            <legend>Licencias y aptitud</legend>
+            <legend>Licences and fitness</legend>
             <p class="leg-hint">Departments screen on these before they read anything else.</p>
             <div class="row">
               <div class="field"><label>Driver's licence class</label>
@@ -208,7 +208,7 @@
           </fieldset>
 
           <fieldset>
-            <legend>Formación</legend>
+            <legend>Education and history</legend>
             <p class="leg-hint">Education and any non-fire work history worth carrying.</p>
             <div class="row">
               <div class="field"><label>Highest education</label>
@@ -225,7 +225,7 @@
           </fieldset>
 
           <fieldset>
-            <legend>Referencias</legend>
+            <legend>References</legend>
             <div class="row">
               <div class="field"><label>Reference 1 — name</label><input type="text" name="ref1_name"></div>
               <div class="field"><label>Relationship</label><input type="text" name="ref1_rel" placeholder="Fire chief"></div>
@@ -239,7 +239,7 @@
           </fieldset>
 
           <div style="display:flex;gap:12px;align-items:center">
-            <button type="submit" class="btn">Guardar perfil</button>
+            <button type="submit" class="btn">Save profile</button>
             <span id="profile-saved" style="color:var(--ok);font-size:13.5px"></span>
           </div>
         </form>
@@ -249,7 +249,7 @@
       <section class="panel" id="p-docs" hidden>
         <div class="grid g2" style="margin-bottom:20px">
           <div class="card">
-            <h3>Currículum</h3>
+            <h3>Résumé</h3>
             <p class="hint">Upload once. Brigada reuses it and tailors the letter per department.</p>
             <div class="drop" id="drop-resume">
               <div class="big">📄</div>
@@ -261,7 +261,7 @@
           </div>
 
           <div class="card">
-            <h3>Documentos de apoyo</h3>
+            <h3>Supporting documents</h3>
             <p class="hint">Certificates, abstract, fit test, immunization record, CRC.</p>
             <div class="drop" id="drop-doc">
               <div class="big">❋</div>
@@ -274,7 +274,7 @@
         </div>
 
         <div class="card">
-          <h3>Certificaciones</h3>
+          <h3>Certifications</h3>
           <p class="hint">Expiry tracking — Brigada warns before anything lapses, because a lapsed cert silently disqualifies an application.</p>
           <div class="row" style="align-items:end;margin-bottom:16px">
             <div class="field" style="margin:0"><label>Certification</label>
@@ -290,7 +290,7 @@
             <div class="field" style="margin:0"><label>Status</label>
               <select id="cert-status"><option>Complete</option><option>In progress</option><option>Partial</option><option>Expired</option></select></div>
             <div class="field" style="margin:0"><label>Expires</label><input type="date" id="cert-expiry"></div>
-            <button class="btn" id="btn-add-cert" type="button">Añadir</button>
+            <button class="btn" id="btn-add-cert" type="button">Add</button>
           </div>
           <div id="cert-list">
             <div class="empty"><div class="big">❋</div>No certifications recorded yet.</div>
@@ -307,15 +307,15 @@
           Brigada checks each source for new postings and scores them against what Sandra holds.</div>
         </div>
         <div style="display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap">
-          <button class="btn" id="btn-scan2">Buscar ahora</button>
-          <button class="btn ghost" id="btn-seed">Cargar empleadores</button>
+          <button class="btn" id="btn-scan2">Scan now</button>
+          <button class="btn ghost" id="btn-seed">Load employers</button>
           <input type="text" id="job-filter" placeholder="Filter by department or city…" style="flex:1;min-width:210px">
         </div>
         <div class="tablewrap">
           <table>
             <thead><tr>
-              <th>Empleador</th><th>Puesto</th><th>Tipo</th><th>Ciudad</th>
-              <th>Cierra</th><th>Match</th><th>Portal</th><th></th>
+              <th>Employer</th><th>Role</th><th>Type</th><th>City</th>
+              <th>Closes</th><th>Match</th><th>Portal</th><th></th>
             </tr></thead>
             <tbody id="jobs-body">
               <tr><td colspan="8"><div class="empty"><div class="big">◎</div>
@@ -336,8 +336,8 @@
         <div class="tablewrap">
           <table>
             <thead><tr>
-              <th>Empleador</th><th>Puesto</th><th>Estado</th><th>Enviada</th>
-              <th>Última respuesta</th><th></th>
+              <th>Employer</th><th>Role</th><th>Status</th><th>Submitted</th>
+              <th>Last reply</th><th></th>
             </tr></thead>
             <tbody id="apps-body">
               <tr><td colspan="6"><div class="empty"><div class="big">✈</div>
@@ -352,7 +352,7 @@
         <div class="chat">
           <div class="msgs" id="msgs">
             <div class="msg sys">Brigada runs on your machine. This conversation is stored locally.</div>
-            <div class="msg bot">Hola Sandra. I'm here to help you land a fire service job.
+            <div class="msg bot">Hi Sandra. I'm here to help you land a fire service job.
 
 I can look up which departments are hiring, tell you what each one requires, draft a cover letter in your voice, and keep track of every application and reply.
 
@@ -360,7 +360,7 @@ A good place to start: tell me which departments you've already applied to, or a
           </div>
           <div class="composer">
             <textarea id="chat-input" placeholder="Ask about departments, requirements, deadlines, or ask for a cover letter…" rows="1"></textarea>
-            <button class="btn" id="btn-send">Enviar</button>
+            <button class="btn" id="btn-send">Send</button>
           </div>
         </div>
       </section>
