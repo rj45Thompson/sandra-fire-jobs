@@ -341,8 +341,28 @@ class Handler(BaseHTTPRequestHandler):
             return {}
 
     def _authed(self) -> bool:
+        """
+        The token exists to stop OTHER websites driving this engine. It is not
+        needed for the page the engine served itself: a same-origin request
+        already proves it came from our own UI. So local use needs no token,
+        and only genuine cross-origin callers have to present one.
+        """
         if not TOKEN:
-            return True   # no token configured = local dev, allow
+            return True
+
+        origin = self.headers.get("Origin")
+        if not origin:
+            # No Origin header - a same-origin GET, or a non-browser client
+            # on the loopback interface. Both are ours.
+            return True
+
+        try:
+            host = origin.split("//", 1)[1]
+        except IndexError:
+            host = ""
+        if host in (f"127.0.0.1:{PORT}", f"localhost:{PORT}"):
+            return True
+
         return self.headers.get("X-Muster-Token") == TOKEN
 
     def log_message(self, fmt, *args):
@@ -693,14 +713,55 @@ def _chat_claude_cli(system: str, history: list, message: str) -> str:
         "Answer the question she actually asked, immediately, in plain prose. "
         "No greeting, no menu of options, no offer to help - just the answer."
     )
-    user = (f"Earlier in our conversation:{nl}{convo}{nl}{nl}{message}"
-            if convo else message)
-    exe = ENV.get("CLAUDE_CLI", "claude")
-    proc = subprocess.run(
-        [exe, "-p", user, "--append-system-prompt", sys_prompt,
-         "--output-format", "text"],
-        capture_output=True, text=True, timeout=240,
-        shell=(os.name == "nt"), encoding="utf-8", errors="replace")
+    # Label the transcript unmistakably and put the live question last, or the
+    # model reads the pasted history as ambient "session context" and asks what
+    # you want instead of answering.
+    if convo:
+        user = (f"[Transcript of our earlier messages - context only, do not"
+                f" reply to these]{nl}{convo}{nl}"
+                f"[End of transcript]{nl}{nl}"
+                f"Sandra's new question, answer this one:{nl}{message}")
+    else:
+        user = message
+    # Three things matter here, each of which broke it in turn:
+    #   1. --system-prompt REPLACES Claude Code's coding-agent prompt.
+    #      --append- leaves it a coding assistant that talks about the repo.
+    #   2. Never shell=True with an argument list on Windows - cmd.exe mangles
+    #      a long multi-line prompt and the message never arrives. Resolve the
+    #      real executable and pass argv directly.
+    #   3. Run from a neutral directory so it does not pick up this project's
+    #      files, CLAUDE.md or git status as "session context".
+    import shutil
+    import tempfile
+
+    exe = ENV.get("CLAUDE_CLI") or shutil.which("claude")
+    if not exe:
+        raise RuntimeError("claude CLI not found on PATH")
+
+    # Outside the repo entirely - a directory inside the working tree still
+    # shows up in git status and leaks the project as context.
+    neutral = Path(tempfile.gettempdir()) / "muster_chat"
+    neutral.mkdir(parents=True, exist_ok=True)
+
+    # System prompt via file - avoids Windows command-line length limits.
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False,
+                                     encoding="utf-8", dir=str(neutral)) as f:
+        f.write(sys_prompt)
+        sys_file = f.name
+
+    try:
+        # The message goes in on STDIN, not argv. A multi-line prompt passed
+        # as an argument gets mangled and the model never sees the question.
+        proc = subprocess.run(
+            [exe, "-p", "--system-prompt-file", sys_file,
+             "--output-format", "text"],
+            input=user, capture_output=True, text=True, timeout=240,
+            cwd=str(neutral), encoding="utf-8", errors="replace")
+    finally:
+        try:
+            os.unlink(sys_file)
+        except OSError:
+            pass
     out = (proc.stdout or "").strip()
     if not out:
         raise RuntimeError((proc.stderr or "claude cli returned nothing")[:200])

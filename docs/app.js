@@ -4,8 +4,15 @@
    demo when the engine is not running, so the page is never dead.
    =============================================================== */
 
+/* When the engine serves this page, talk to it with relative URLs: same
+   origin, no CORS, no token, nothing for a browser or extension to block.
+   The stored URL is only used when the page is opened from somewhere else,
+   such as the public GitHub Pages copy. */
+const SELF_HOSTED = /^https?:$/.test(location.protocol) &&
+                    location.port === '8770';
+
 const CFG = {
-  api: localStorage.getItem('muster.api') || 'http://127.0.0.1:8770',
+  api: SELF_HOSTED ? '' : (localStorage.getItem('muster.api') || 'http://127.0.0.1:8770'),
   token: localStorage.getItem('muster.token') || '',
 };
 
@@ -95,12 +102,29 @@ function setConn(ok, text) {
 }
 
 $('#btn-connect').onclick = async () => {
-  const url = prompt('Local engine URL', CFG.api);
-  if (url === null) return;
-  const tok = prompt('API token (from your .env file)', CFG.token);
-  if (tok === null) return;
-  CFG.api = url.replace(/\/+$/, '');
-  CFG.token = tok;
+  if (SELF_HOSTED) {
+    // Nothing to configure - the engine served this page.
+    setConn(ONLINE, ONLINE ? 'Engine v0.1.0' : 'Engine offline');
+    await ping();
+    if (ONLINE) refreshAll();
+    return;
+  }
+  let url, tok;
+  try {
+    url = window.prompt('Local engine URL', CFG.api || 'http://127.0.0.1:8770');
+    if (url === null) return;
+    tok = window.prompt('API token (from your .env file)', CFG.token);
+    if (tok === null) return;
+  } catch {
+    // Some browsers suppress prompt(); fall back to the known default.
+    url = 'http://127.0.0.1:8770';
+    tok = CFG.token;
+    alert('This browser blocks pop-up prompts.\n\n' +
+          'Open the app directly at http://127.0.0.1:8770 instead - ' +
+          'no token is needed there.');
+  }
+  CFG.api = String(url).replace(/\/+$/, '');
+  CFG.token = String(tok || '');
   localStorage.setItem('muster.api', CFG.api);
   localStorage.setItem('muster.token', CFG.token);
   if (await ping()) refreshAll();
