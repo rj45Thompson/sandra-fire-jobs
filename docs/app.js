@@ -42,7 +42,7 @@ const TITLES = {
   dash:   ['Dashboard', 'Your search at a glance'],
   profile: ['Profile', 'Everything the applications ask for'],
   docs:   ['Documents', 'Résumé, certifications and expiry dates'],
-  jobs:   ['Jobs', 'Every department, watched'],
+  jobs:   ['Jobs', 'Every employer, watched'],
   apps:   ['Applications', 'Submitted, in review, and replies'],
   chat:   ['Chat', 'Ask anything about the search'],
 };
