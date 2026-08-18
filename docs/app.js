@@ -350,57 +350,101 @@ async function loadStats() {
 }
 
 /* ---------- chat ---------- */
-const MSGS = $('#msgs'), INPUT = $('#chat-input');
+/* Two boxes - one on the dashboard, one on the Chat panel - sharing a
+   single conversation, so a question asked in either appears in both. */
+const BOXES = [
+  { msgs: '#msgs',      input: '#chat-input',      send: '#btn-send' },
+  { msgs: '#msgs-mini', input: '#chat-input-mini', send: '#btn-send-mini' },
+];
 
 function addMsg(role, text) {
-  const d = document.createElement('div');
-  d.className = 'msg ' + role;
-  d.textContent = text;
-  MSGS.appendChild(d);
-  MSGS.scrollTop = MSGS.scrollHeight;
-  return d;
+  let last = null;
+  BOXES.forEach(b => {
+    const box = $(b.msgs);
+    if (!box) return;
+    const d = document.createElement('div');
+    d.className = 'msg ' + role;
+    d.textContent = text;
+    box.appendChild(d);
+    box.scrollTop = box.scrollHeight;
+    last = d;
+  });
+  return last;
 }
 
-INPUT.addEventListener('input', () => {
-  INPUT.style.height = 'auto';
-  INPUT.style.height = Math.min(INPUT.scrollHeight, 190) + 'px';
-});
-INPUT.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-});
-$('#btn-send').onclick = send;
+function setBotText(text) {
+  BOXES.forEach(b => {
+    const box = $(b.msgs);
+    if (!box) return;
+    const pending = box.querySelector('.msg.bot.pending');
+    if (pending) { pending.textContent = text; pending.classList.remove('pending'); }
+    box.scrollTop = box.scrollHeight;
+  });
+}
 
-async function send() {
-  const text = INPUT.value.trim();
+function addPending() {
+  BOXES.forEach(b => {
+    const box = $(b.msgs);
+    if (!box) return;
+    const d = document.createElement('div');
+    d.className = 'msg bot pending';
+    d.textContent = 'thinking…';
+    box.appendChild(d);
+    box.scrollTop = box.scrollHeight;
+  });
+}
+
+BOXES.forEach(b => {
+  const input = $(b.input), btn = $(b.send);
+  if (!input || !btn) return;
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 190) + 'px';
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); }
+  });
+  btn.onclick = () => send(input);
+});
+
+async function send(input) {
+  const text = input.value.trim();
   if (!text) return;
   addMsg('me', text);
-  INPUT.value = ''; INPUT.style.height = 'auto';
+  BOXES.forEach(b => { const i = $(b.input); if (i) { i.value = ''; i.style.height = 'auto'; } });
 
   const log = LS.get('chatlog', []);
   log.push({ role: 'user', text, at: new Date().toISOString() });
   LS.set('chatlog', log);
 
   if (!ONLINE) {
-    addMsg('bot', 'The local engine is not running, so I cannot answer yet.\n\nStart it with:\n  py backend/server.py\n\nthen click Connect in the sidebar. Your message is saved and will still be here.');
+    addMsg('bot', 'The local engine is not running, so I cannot answer yet.
+
+Start it with:
+  py backend/server.py
+
+then click Connect in the sidebar. Your message is saved and will still be here.');
     return;
   }
 
-  const holder = addMsg('bot', '…');
+  addPending();
   try {
     const r = await api('/chat', {
       method: 'POST',
       body: JSON.stringify({ message: text, history: log.slice(-20) }),
     });
-    holder.textContent = r.reply || '(no reply)';
+    setBotText(r.reply || '(no reply)');
     log.push({ role: 'assistant', text: r.reply, at: new Date().toISOString() });
     LS.set('chatlog', log);
   } catch (e) {
-    holder.textContent = 'Engine error: ' + e.message;
+    setBotText('Engine error: ' + e.message);
   }
 }
 
 function restoreChat() {
   const log = LS.get('chatlog', []);
+  if (!log.length) return;
+  BOXES.forEach(b => { const box = $(b.msgs); if (box) box.innerHTML = ''; });
   log.slice(-40).forEach(m => addMsg(m.role === 'user' ? 'me' : 'bot', m.text));
 }
 

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=202608180953">
+<link rel="stylesheet" href="styles.css?v=20260818095928">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌺</text></svg>">
 </head>
 <body>
@@ -61,6 +61,14 @@
 
       <!-- ── DASHBOARD ── -->
       <section class="panel" id="p-dash">
+        <div class="lovenote">
+          <span class="heart">❤</span>
+          <div>
+            <b>RJ loves you.</b>
+            <span>He built this so the searching would be a little less heavy.</span>
+          </div>
+        </div>
+
         <div class="banner pink" id="setup-banner">
           <span class="bi">🌺</span>
           <div>
@@ -76,6 +84,20 @@
           <div class="stat p2"><div class="n" id="s-sent">—</div><div class="l">Submitted</div></div>
           <div class="stat p3"><div class="n" id="s-soon">—</div><div class="l">Closing soon</div></div>
           <div class="stat p4"><div class="n" id="s-reply">—</div><div class="l">Replies</div></div>
+        </div>
+
+        <div class="card dash-chat" style="margin-bottom:18px">
+          <h3>Ask me anything</h3>
+          <p class="hint">Fire, healthcare, or any job at all. I know your profile and what is open.</p>
+          <div class="chat mini">
+            <div class="msgs" id="msgs-mini">
+              <div class="msg bot">Hi Sandra. Ask me what is open right now, what an employer needs, or anything about the nursing registration.</div>
+            </div>
+            <div class="composer">
+              <textarea id="chat-input-mini" placeholder="Type a question…" rows="1"></textarea>
+              <button class="btn" id="btn-send-mini">Send</button>
+            </div>
+          </div>
         </div>
 
         <div class="grid g2">
@@ -453,6 +475,6 @@ A good place to start: tell me what kind of work you want, or ask me what is ope
   </main>
 </div>
 
-<script src="app.js?v=202608180953"></script>
+<script src="app.js?v=20260818095928"></script>
 </body>
 </html>

@@ -626,9 +626,12 @@ def _chat_ollama(system: str, history: list, message: str) -> str:
         msgs.append({"role": "user" if h.get("role") == "user" else "assistant",
                      "content": h.get("text", "")})
     msgs.append({"role": "user", "content": message})
+    # num_gpu 0 keeps inference on the CPU so the GPU stays free for other work.
+    # Set OLLAMA_NUM_GPU to a positive number in .env to use the graphics card.
+    opts = {"num_gpu": int(ENV.get("OLLAMA_NUM_GPU", 0))}
     payload = json.dumps({
         "model": ENV.get("OLLAMA_MODEL", "qwen2.5-coder:7b"),
-        "messages": msgs, "stream": False}).encode()
+        "messages": msgs, "stream": False, "options": opts}).encode()
     host = ENV.get("OLLAMA_HOST", "http://127.0.0.1:11434")
     req = urllib.request.Request(f"{host}/api/chat", data=payload,
                                  headers={"Content-Type": "application/json"})

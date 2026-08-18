@@ -316,3 +316,20 @@ td.wrap-cell{white-space:normal; min-width:210px}
 .track:hover{border-color:var(--pink); background:var(--pink-wash)}
 .track input{width:18px; height:18px; accent-color:var(--pink); cursor:pointer}
 .track:has(input:checked){border-color:var(--pink); background:var(--pink-wash)}
+
+/* a note from RJ */
+.lovenote{
+  display:flex; align-items:center; gap:14px;
+  border-radius:var(--r-lg); padding:15px 20px; margin-bottom:18px;
+  background:linear-gradient(115deg,var(--pink),var(--clay) 62%,var(--marigold));
+  color:#fff; box-shadow:0 6px 22px rgba(255,46,136,.32);
+}
+.lovenote .heart{font-size:23px; flex:none; animation:beat 2.6s ease-in-out infinite}
+@keyframes beat{0%,100%{transform:scale(1)}12%{transform:scale(1.18)}24%{transform:scale(1)}36%{transform:scale(1.12)}}
+.lovenote b{display:block; font-family:var(--display); font-size:17px; letter-spacing:-.01em}
+.lovenote span{font-size:13.5px; opacity:.93}
+
+/* chat embedded on the dashboard */
+.chat.mini{height:auto; min-height:0}
+.chat.mini .msgs{max-height:260px; min-height:96px; padding-bottom:12px}
+.chat.mini .msg{max-width:88%}
