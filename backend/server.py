@@ -230,6 +230,7 @@ SEED_EMPLOYERS = [
 
 
 EMPLOYERS_JSON = Path(__file__).resolve().parent / "employers.json"
+SOURCES_JSON = Path(__file__).resolve().parent / "sources.json"
 
 
 def seed_employers() -> int:
@@ -487,8 +488,29 @@ class Handler(BaseHTTPRequestHandler):
         """
         found = 0
         checked = 0
+        skipped = 0
         pat = re.compile(r"fire\s*fighter|firefighter|fire\s+services|emergency\s+response",
                          re.I)
+
+        # Aggregators are polled only where robots.txt permits it. Several major
+        # boards (Indeed, LinkedIn, Glassdoor, CivicInfo BC) explicitly disallow
+        # automated job tools, so they are recorded and deliberately never fetched.
+        srcs = SOURCES_JSON
+        if srcs.exists():
+            try:
+                for s in json.loads(srcs.read_text(encoding="utf-8")).get("sources", []):
+                    if not s.get("allowed"):
+                        skipped += 1
+                        continue
+                    db().execute(
+                        """INSERT OR IGNORE INTO employers
+                           (name, kind, city, province, careers_url, ats, hires, notes)
+                           VALUES (?,?,?,?,?,?,?,?)""",
+                        (s["name"], "aggregator", "-", "CA", s["url"], "feed", "varies",
+                         f"Crawl delay {s.get('crawl_delay', 5)}s. {s.get('notes', '')}"))
+                db().commit()
+            except (json.JSONDecodeError, KeyError, sqlite3.Error):
+                pass
         for e in db().execute("SELECT * FROM employers").fetchall():
             url = e["careers_url"]
             if not url:
@@ -517,8 +539,8 @@ class Handler(BaseHTTPRequestHandler):
             except sqlite3.Error:
                 pass
         db().commit()
-        log_event(f"Scan complete - {checked} sources checked, {found} new leads")
-        return {"ok": True, "checked": checked, "new": found}
+        log_event(f"Scan complete - {checked} sources checked, {found} new leads, {skipped} skipped (robots.txt)")
+        return {"ok": True, "checked": checked, "new": found, "skipped_by_robots": skipped}
 
     def _chat(self, message: str, history: list) -> str:
         db().execute("INSERT INTO chat (role,text) VALUES ('user',?)", (message,))

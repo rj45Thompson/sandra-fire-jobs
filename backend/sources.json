@@ -1,0 +1,111 @@
+{
+  "_note": "Aggregator feeds worth polling, with robots.txt compliance recorded per source. Verified 2026-08-18. The scanner MUST honour crawl_delay and MUST NOT poll any source marked allowed:false - several major job boards explicitly disallow automated job-appliers in robots.txt, and their terms prohibit scraping regardless.",
+  "_verified": "2026-08-18",
+  "sources": [
+    {
+      "name": "firerecruitment.ca",
+      "url": "https://firerecruitment.ca",
+      "kind": "aggregator",
+      "coverage": "BC, AB, SK, ON and beyond - the dominant Canadian fire-recruitment aggregator",
+      "allowed": true,
+      "robots": "Only blocks /wp-admin/, /*.pdf, /resume/* - listings are open",
+      "crawl_delay": 5,
+      "feed": "per-user personalised RSS plus email alerts (needs a free account)",
+      "priority": 1,
+      "notes": "HIGHEST-VALUE SOURCE. Running 12+ years, 8,000+ members, postings dated within days of check. Covers Alberta properly. Sandra should register for the email alerts herself regardless of what the engine does - it is the closest thing to a single national feed for fire jobs."
+    },
+    {
+      "name": "Government of Canada Job Bank",
+      "url": "https://www.jobbank.gc.ca",
+      "kind": "government",
+      "coverage": "National",
+      "noc": "42101",
+      "allowed": true,
+      "robots": "User-agent: * / Crawl-delay: 5 with ZERO Disallow lines - the most permissive source checked",
+      "crawl_delay": 5,
+      "feed": "RSS available from search results (/jobsearch/feed/jobSearchRSSfeed...)",
+      "priority": 2,
+      "notes": "NOC 2021 code for firefighters is 42101. Fully permissive robots.txt, so this is the cleanest legal polling target available."
+    },
+    {
+      "name": "firefighterrecruitments.ca",
+      "url": "https://firefighterrecruitments.ca",
+      "kind": "aggregator",
+      "coverage": "Ontario-weighted, running since 2008",
+      "allowed": true,
+      "robots": "Empty Disallow - nothing blocked",
+      "crawl_delay": 5,
+      "priority": 4,
+      "notes": "Second aggregator. Ontario-heavy so lower value from Alberta, but open and worth a low-frequency poll."
+    },
+    {
+      "name": "Alberta Municipalities job board",
+      "url": "https://abmunis.ca/job-postings",
+      "kind": "association",
+      "coverage": "Alberta municipal",
+      "allowed": true,
+      "robots": "Stock Drupal - blocks /core/, /profiles/, /admin/; sitemap at /sitemap.xml",
+      "crawl_delay": 5,
+      "priority": 3,
+      "notes": "Real municipal board with ~48 live postings. Careful: abmunis.ca/careers is a DIFFERENT thing - that is the association's own internal staff jobs on Dayforce, not the municipal board. Easy trap."
+    },
+    {
+      "name": "Rural Municipalities of Alberta",
+      "url": "https://rmalberta.com/job-board/",
+      "kind": "association",
+      "coverage": "Alberta rural municipal - directly relevant to county paid-on-call roles",
+      "allowed": true,
+      "robots": "Plain WordPress - only /wp-admin/ blocked; sitemap at /wp-sitemap.xml",
+      "crawl_delay": 5,
+      "priority": 3,
+      "notes": "Rural counties are exactly where paid-on-call firefighter roles live, so this board is better matched to Sandra than the urban ones."
+    },
+    {
+      "name": "Alberta Fire Chiefs Association",
+      "url": "https://afca.ca",
+      "kind": "association",
+      "coverage": "Alberta",
+      "allowed": true,
+      "crawl_delay": 5,
+      "priority": 6,
+      "notes": "Career Opportunities sit under the Command Post menu, but postings seen were command-level only (Fire Chief, Assistant Chief) rather than entry firefighter. Low value now, high value in ten years."
+    },
+    {
+      "name": "Indeed Canada",
+      "url": "https://ca.indeed.com",
+      "kind": "aggregator",
+      "allowed": false,
+      "robots": "Disallow /job/, /jobs/CA/, /viewjob? for generic agents; Scrapy named and blocked site-wide; terms separately prohibit scraping",
+      "priority": 99,
+      "notes": "DO NOT POLL. Indeed's robots.txt leaves no path for a generically-identified automated job tool to fetch listings or job pages. Sandra can of course browse and apply by hand - the restriction is on automation, not on her."
+    },
+    {
+      "name": "LinkedIn",
+      "url": "https://www.linkedin.com",
+      "kind": "aggregator",
+      "allowed": false,
+      "robots": "Blocks /jobs?runSearch*, /jobs/view/externalApply/, /jobs-guest/, /api/jobPostings/* for effectively everyone",
+      "priority": 99,
+      "notes": "DO NOT POLL. Manual use only."
+    },
+    {
+      "name": "Glassdoor",
+      "url": "https://www.glassdoor.ca",
+      "kind": "aggregator",
+      "allowed": false,
+      "robots": "Named AI agents restricted to /Award/ and /About/ only; job paths off-limits",
+      "priority": 99,
+      "notes": "DO NOT POLL. Manual use only."
+    },
+    {
+      "name": "CivicInfo BC",
+      "url": "https://www.civicinfo.bc.ca/careers",
+      "kind": "association",
+      "coverage": "BC municipal - the official BC local-government job board",
+      "allowed": false,
+      "robots": "Cloudflare Content-Signal ai-train=no; ClaudeBot, GPTBot and others named and disallowed; /careers returns 403 to automated fetchers",
+      "priority": 99,
+      "notes": "DO NOT POLL. Only relevant if Sandra ever looks at BC anyway. LGMA BC confirms this IS the BC board - there is no separate one."
+    }
+  ]
+}

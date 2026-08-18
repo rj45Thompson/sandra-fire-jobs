@@ -28,3 +28,6 @@ node_modules/
 .playwright/
 *.log
 .session-state.json
+
+data/server.out
+data/server.err
