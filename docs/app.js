@@ -70,8 +70,7 @@ const LS = {
 /* ---------- navigation ---------- */
 const TITLES = {
   dash:   ['Dashboard', 'Your search at a glance'],
-  profile: ['Profile', 'Everything the applications ask for'],
-  docs:   ['Documents', 'Résumé, certifications and expiry dates'],
+  profile: ['Profile & documents', 'Résumé, details and certifications - all in one place'],
   jobs:   ['Jobs', 'Every employer, watched'],
   apps:   ['Applications', 'Submitted, in review, and replies'],
   chat:   ['Chat', 'Ask anything about the search'],
@@ -228,7 +227,7 @@ async function loadCerts() {
 function renderCerts() {
   const certs = LS.get('certs', []);
   const box = $('#cert-list');
-  $('#tag-docs').textContent = certs.length;
+  if ($('#tag-docs')) $('#tag-docs').textContent = certs.length;
   if (!box) return;
   if (!certs.length) {
     box.innerHTML = '<div class="empty"><div class="big">❋</div>Upload your résumé and your certifications appear here.</div>';
@@ -296,9 +295,16 @@ function wireDrop(zoneSel, inputSel, kind, listSel) {
             body: JSON.stringify({ kind, filename: f.name, content_b64: b64 }),
           });
           list[list.length - 1].uploaded = true;
-          if (kind === 'resumes' && res.lifted_certs) {
+          if (kind === 'resumes') {
+            // Refresh on ANY résumé upload, not just one that happened to
+            // yield a certification - a résumé can fill in profile details
+            // with no recognised cert at all, and gating the refresh on
+            // lifted_certs left "Still needed" stale in exactly that case.
             await loadCerts(); await loadGaps();
-            alert(`Read your résumé and added ${res.lifted_certs} certification${res.lifted_certs === 1 ? '' : 's'} and ${res.lifted_fields || 0} profile detail${res.lifted_fields === 1 ? '' : 's'}.`);
+            const c = res.lifted_certs || 0, fields = res.lifted_fields || 0;
+            alert(c || fields
+              ? `Read your résumé and added ${c} certification${c === 1 ? '' : 's'} and ${fields} profile detail${fields === 1 ? '' : 's'}.`
+              : 'Saved your résumé. I could not read any details out of it automatically - answer what is still needed in the chat below and it will be recorded.');
           }
         } catch (err) { console.warn('upload failed', err); }
       }
@@ -633,7 +639,6 @@ const BOXES = [
   { msgs: '#msgs',         input: '#chat-input',         send: '#btn-send',         ctx: 'general'   },
   { msgs: '#msgs-mini',    input: '#chat-input-mini',    send: '#btn-send-mini',    ctx: 'general'   },
   { msgs: '#msgs-jobs',    input: '#chat-input-jobs',    send: '#btn-send-jobs',    ctx: 'jobs'      },
-  { msgs: '#msgs-docs',    input: '#chat-input-docs',    send: '#btn-send-docs',    ctx: 'documents' },
   { msgs: '#msgs-profile', input: '#chat-input-profile', send: null, ctx: 'profile'   },
 ];
 

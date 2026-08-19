@@ -29,8 +29,7 @@
 
     <nav class="nav" id="nav">
       <button data-panel="dash"  aria-current="true"><span class="ico">◈</span><span class="lbl">Dashboard</span></button>
-      <button data-panel="profile"><span class="ico">✦</span><span class="lbl">Profile</span><span class="tag" id="tag-profile">0%</span></button>
-      <button data-panel="docs"><span class="ico">❋</span><span class="lbl">Documents</span><span class="tag" id="tag-docs">0</span></button>
+      <button data-panel="profile"><span class="ico">✦</span><span class="lbl">Profile &amp; docs</span><span class="tag" id="tag-profile">0%</span></button>
       <button data-panel="jobs"><span class="ico">◎</span><span class="lbl">Jobs</span><span class="tag" id="tag-jobs">0</span></button>
       <button data-panel="apps"><span class="ico">✈</span><span class="lbl">Applications</span><span class="tag" id="tag-apps">0</span></button>
       <button data-panel="inbox"><span class="ico">✉</span><span class="lbl">Inbox</span><span class="tag" id="tag-inbox">0</span></button>
@@ -74,9 +73,10 @@
           <span class="bi">🌺</span>
           <div>
             <b>Welcome, Sandra</b>
-            Start in <b>Profile</b> to enter your details, then <b>Documents</b> for your
-            certifications. Once the local engine is connected, Muster watches every
-            employer on your list and scores each posting against what you hold.
+            Start in <b>Profile &amp; docs</b> — upload your résumé there and your details
+            and certifications fill themselves in. Once the local engine is connected,
+            Muster watches every employer on your list and scores each posting against
+            what you hold.
           </div>
         </div>
 
@@ -165,10 +165,22 @@
         </div>
 
         <div class="card" style="margin-bottom:18px">
+          <h3>Start here — upload your résumé</h3>
+          <p class="hint">Everything below fills itself in from this one file: your details, your certifications, and most of what an application asks for.</p>
+          <div class="drop" id="drop-resume">
+            <div class="big">📄</div>
+            <b>Drop résumé here</b> or click to browse
+            <small>PDF, DOC, DOCX</small>
+          </div>
+          <input type="file" id="file-resume" hidden accept=".pdf,.doc,.docx,.rtf,.odt">
+          <div id="resume-list" style="margin-top:14px"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:18px">
           <h3>Still needed</h3>
           <p class="hint">Only the things a job application will actually ask for that we do not have yet. Answer them in the chat below, in your own words.</p>
           <div id="gap-list">
-            <div class="empty"><div class="big">✦</div>Upload your résumé in Documents and this fills itself in.</div>
+            <div class="empty"><div class="big">✦</div>Upload your résumé above and this fills itself in.</div>
           </div>
         </div>
 
@@ -186,60 +198,17 @@
           </div>
         </div>
 
-        <div class="card">
+        <div class="card" style="margin-bottom:18px">
           <h3>What we have</h3>
           <p class="hint">Read from your résumé and from what you have told me.</p>
           <div id="have-list">
             <div class="empty"><div class="big">✧</div>Nothing yet.</div>
           </div>
         </div>
-      </section>
 
-      <!-- ── DOCUMENTS ── -->
-      <section class="panel" id="p-docs" hidden>
         <div class="card" style="margin-bottom:18px">
-          <h3>Ask about your documents</h3>
-          <p class="hint">What is missing, what expires soon, what a given employer will want attached.</p>
-          <div class="chat mini">
-            <div class="msgs" id="msgs-docs">
-              <div class="msg bot">Upload your resume below, then ask me what else an employer will want from you.</div>
-            </div>
-            <div class="composer">
-              <textarea id="chat-input-docs" placeholder="e.g. what documents do I still need?" rows="1"></textarea>
-              <button class="btn" id="btn-send-docs">Send</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="grid g2" style="margin-bottom:20px">
-          <div class="card">
-            <h3>Résumé</h3>
-            <p class="hint">Upload once. Muster reuses it and tailors the letter per department.</p>
-            <div class="drop" id="drop-resume">
-              <div class="big">📄</div>
-              <b>Drop résumé here</b> or click to browse
-              <small>PDF, DOC, DOCX</small>
-            </div>
-            <input type="file" id="file-resume" hidden accept=".pdf,.doc,.docx,.rtf,.odt">
-            <div id="resume-list" style="margin-top:14px"></div>
-          </div>
-
-          <div class="card">
-            <h3>Supporting documents</h3>
-            <p class="hint">Certificates, abstract, fit test, immunization record, CRC.</p>
-            <div class="drop" id="drop-doc">
-              <div class="big">❋</div>
-              <b>Drop documents here</b>
-              <small>Anything a department might ask you to attach</small>
-            </div>
-            <input type="file" id="file-doc" hidden multiple>
-            <div id="doc-list" style="margin-top:14px"></div>
-          </div>
-        </div>
-
-        <div class="card">
           <h3>Certifications</h3>
-          <p class="hint">Lifted automatically from your résumé. Upload it above and these fill in. You can still add anything the parser missed.</p>
+          <p class="hint">Lifted automatically from your résumé. You can still add anything the parser missed.</p>
           <div id="cert-list">
             <div class="empty"><div class="big">❋</div>Upload your résumé and your certifications appear here.</div>
           </div>
@@ -254,6 +223,18 @@
               <button class="btn" id="btn-add-cert" type="button">Add</button>
             </div>
           </details>
+        </div>
+
+        <div class="card">
+          <h3>Supporting documents</h3>
+          <p class="hint">Certificates, abstract, fit test, immunization record, CRC — anything a department might ask you to attach.</p>
+          <div class="drop" id="drop-doc">
+            <div class="big">❋</div>
+            <b>Drop documents here</b>
+            <small>Anything a department might ask you to attach</small>
+          </div>
+          <input type="file" id="file-doc" hidden multiple>
+          <div id="doc-list" style="margin-top:14px"></div>
         </div>
       </section>
 
