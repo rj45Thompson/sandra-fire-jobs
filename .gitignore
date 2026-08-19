@@ -9,7 +9,12 @@ token.json
 # ── PERSONAL DATA: Sandra's real info stays local ──────────
 data/profile.json
 data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.db-journal
 data/*.sqlite
+data/*.sqlite-wal
+data/*.sqlite-shm
 data/*.sqlite3
 data/chat_log.json
 data/resumes/
