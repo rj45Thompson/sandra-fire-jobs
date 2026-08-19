@@ -548,40 +548,7 @@ if ($('#btn-send-upgrade')) {
     }
   });
 }
-async function resetUpgrade() {
-  if (!ONLINE) return;
-  if (!confirm('Put the original design back?\n\nThis undoes every change to how '
-             + 'the app looks. Your current version is saved first, so this is '
-             + 'reversible too. None of your job data is touched.')) return;
-  addPending(UPGRADE_BOX);
-  try {
-    const r = await api('/upgrade/reset', { method: 'POST', body: '{}' });
-    setBotText(r.error || `${r.message}\n\nReloading…`, UPGRADE_BOX);
-    if (!r.error && r.restored && r.restored.length) setTimeout(() => location.reload(), 1800);
-  } catch (e) { setBotText('Could not restore: ' + e.message, UPGRADE_BOX); }
-}
-
-async function runSelfTest() {
-  if (!ONLINE) return;
-  addPending(UPGRADE_BOX);
-  try {
-    const r = await api('/upgrade/selftest', { method: 'POST', body: '{}' });
-    if (r.skipped) {
-      setBotText('I could not open a browser to test the page, so I cannot say '
-               + 'either way. ' + (r.note || ''), UPGRADE_BOX);
-    } else if (r.ok) {
-      setBotText(`I opened the page and used it - everything works. `
-               + `${r.checks.length} checks passed.`, UPGRADE_BOX);
-    } else {
-      setBotText('Something on the page is not working:\n\n- '
-               + r.failures.join('\n- '), UPGRADE_BOX);
-    }
-  } catch (e) { setBotText('Could not run the check: ' + e.message, UPGRADE_BOX); }
-}
-
 if ($('#btn-undo-upgrade')) $('#btn-undo-upgrade').onclick = undoUpgrade;
-if ($('#btn-reset-upgrade')) $('#btn-reset-upgrade').onclick = resetUpgrade;
-if ($('#btn-selftest')) $('#btn-selftest').onclick = runSelfTest;
 
 /* ---------- custom sources ---------- */
 async function loadSources() {

@@ -358,11 +358,9 @@
       <section class="panel" id="p-upgrade" hidden>
         <div class="banner pink">
           <span class="bi">✧</span>
-          <div><b>Change how this app looks and works</b>
-          Describe what you want and it rewrites its own page - the look, the
-          wording, or where things are. Every change is checked by opening the
-          page and using it before you see it, and anything broken is put back
-          automatically.</div>
+          <div><b>Change how this app looks and reads</b>
+          Describe what you want and it rewrites its own page. A backup is kept
+          every time, so nothing is ever one-way.</div>
         </div>
 
         <div class="card" style="margin-bottom:18px">
@@ -377,33 +375,24 @@
             <button class="idea" type="button">Make the buttons and cards flatter and more modern</button>
             <button class="idea" type="button">Change the welcome message to something shorter</button>
             <button class="idea" type="button">Make it look like a firefighter app, reds and blacks</button>
-            <button class="idea" type="button">Move the settings button to the top of the page</button>
-            <button class="idea" type="button">Add a final confirmation step before an application is sent</button>
-            <button class="idea" type="button">Put the deadlines above everything else on the dashboard</button>
-            <button class="idea" type="button">Add a new tab for interview notes</button>
           </div>
         </div>
 
         <div class="card">
           <h3>Tell it what to change</h3>
-          <p class="hint">Plain English. It can change the colours, the wording, or the shape of the app - moving things, adding a step, adding a tab.</p>
+          <p class="hint">Plain English. It edits the page's own stylesheet, or its wording if that is what you asked for.</p>
           <div class="chat mini">
             <div class="msgs" id="msgs-upgrade">
-              <div class="msg bot">Describe any change to how this app looks, reads or works - including moving things around or adding a step - and I will rewrite my own page to match. I open the page and test it before you see it, so a change that breaks something is put back on its own. Say "undo" for the last change, or use Restore original design to go all the way back.</div>
+              <div class="msg bot">Describe any change to how this app looks or reads, and I will rewrite my own page to match. If you dislike the result, say "undo" and I will put it back.</div>
             </div>
             <div class="composer">
               <textarea id="chat-input-upgrade" placeholder="e.g. change the theme to something calmer…" rows="1"></textarea>
               <button class="btn" id="btn-send-upgrade">Change it</button>
             </div>
           </div>
-          <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+          <div style="margin-top:14px;display:flex;gap:10px">
             <button class="btn quiet" id="btn-undo-upgrade" type="button">Undo last change</button>
-            <button class="btn quiet" id="btn-selftest" type="button">Check the page works</button>
-            <button class="btn quiet" id="btn-reset-upgrade" type="button">Restore original design</button>
           </div>
-          <p class="hint" style="margin-top:10px">Restore puts back the design this app
-             shipped with, however far it has drifted. Your version is saved first, so
-             even that is reversible.</p>
         </div>
       </section>
 

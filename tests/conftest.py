@@ -147,6 +147,14 @@ def engine(tmp_path, monkeypatch):
             "a test reached the real assistant - patch _chat_claude_cli in the test")
     monkeypatch.setattr(server, "_chat_claude_cli", no_assistant)
 
+    # The post-upgrade self-test drives a real browser, which is the right
+    # thing in production and far too slow to run inside every upgrade test
+    # (it took the suite from 12s to 100s). Default it to "skipped" here;
+    # the tests that are actually about the self-test patch it themselves.
+    monkeypatch.setattr(
+        server.Handler, "_self_test",
+        lambda self: {"ok": True, "skipped": True, "checks": [], "failures": []})
+
     if hasattr(server._local, "conn"):
         del server._local.conn
 

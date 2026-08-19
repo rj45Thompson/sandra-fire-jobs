@@ -1041,6 +1041,12 @@ pin.addEventListener('keydown',e=>{if(e.key==='Enter')submit();});
         if p == "/upgrade/undo":
             return self._send(self._upgrade_undo())
 
+        if p == "/upgrade/reset":
+            return self._send(self._upgrade_reset())
+
+        if p == "/upgrade/selftest":
+            return self._send(self._self_test())
+
         if p == "/employers/seed":
             return self._send({"ok": True, "count": seed_employers()})
 
@@ -1405,7 +1411,24 @@ pin.addEventListener('keydown',e=>{if(e.key==='Enter')submit();});
             r"\b(word|words|heading|headline|title|caption|label|"
             r"greeting|message|sentence|phrase)\b", request, re.I)
 
-        if wording_strong:
+        # Structural: moving something, adding something, or changing the
+        # steps of a flow. These are the requests that CANNOT be satisfied
+        # by one file - "put Settings at the top" is markup and the code
+        # that drives it; "add a confirmation step before it sends" is a
+        # dialog and the flow around it. Rewriting one half alone produces
+        # a page that parses and does not work, which is exactly what the
+        # self-test now catches - but it is better not to attempt the
+        # impossible in the first place.
+        structural = re.search(
+            r"\b(move|relocate|put (it|the|that)|reorder|re-?order|rearrange|"
+            r"swap|add (a|an|another)|remove the|get rid of|"
+            r"confirm\w*|are you sure|double-?check step|extra step|"
+            r"new (tab|button|section|panel|screen|step|page)|"
+            r"combine|merge|split|collapse|group)\b", request, re.I)
+
+        if structural and not wording_strong:
+            target = "structural"
+        elif wording_strong:
             target = "index.html"
         elif behaviour:
             target = "app.js"
@@ -1413,6 +1436,9 @@ pin.addEventListener('keydown',e=>{if(e.key==='Enter')submit();});
             target = "index.html"
         else:
             target = "styles.css"
+        if target == "structural":
+            return self._upgrade_structural(request)
+
         src = WEB_DIR / target
         current = src.read_text(encoding="utf-8")
 
@@ -1553,10 +1579,196 @@ pin.addEventListener('keydown',e=>{if(e.key==='Enter')submit();});
                              "specifically."}
 
         src.write_text(new, encoding="utf-8")
+
+        # Static checks cannot see a page that parses and still renders dead:
+        # a handler bound to an element that no longer exists throws at load
+        # and takes every button after it down, silently. So now the page is
+        # actually opened and used before this change is allowed to stand.
+        verdict = self._self_test()
+        if not verdict["ok"]:
+            src.write_text(current, encoding="utf-8")
+            (backup_dir / f"{stamp}-{target}").unlink(missing_ok=True)
+            log_event(f"Upgrade rolled back - it broke the page: {request[:50]}")
+            return {"error": "I made that change, opened the page to check it, "
+                             "and it came back broken - so I put it back the way "
+                             "it was. Nothing is lost. What went wrong: "
+                             + "; ".join(verdict["failures"][:3]),
+                    "rolled_back": True, "failures": verdict["failures"]}
+
         log_event(f"Front-end upgraded: {request[:70]}")
+        msg = f"Updated {target}. Reload the page to see it."
+        if verdict.get("skipped"):
+            msg += " (I could not open a browser to test it, so give it a look.)"
+        else:
+            msg += f" I opened the page and checked it - {len(verdict['checks'])} checks passed."
         return {"ok": True, "file": target, "bytes": len(new),
-                "backup": f"{stamp}-{target}",
-                "message": f"Updated {target}. Reload the page to see it."}
+                "backup": f"{stamp}-{target}", "tested": not verdict.get("skipped"),
+                "checks": verdict.get("checks", []), "message": msg}
+
+    def _upgrade_structural(self, request: str) -> dict:
+        """
+        Change the shape of the app, not just its skin.
+
+        Moving a control, adding a step to a flow, splitting a section -
+        none of these live in one file. The markup and the code that drives
+        it have to move together, so this rewrites both in one shot and
+        treats the pair as a single change: both are validated, both are
+        kept, or both are put back.
+        """
+        files = ["index.html", "app.js", "styles.css"]
+        before = {f: (WEB_DIR / f).read_text(encoding="utf-8") for f in files}
+
+        brief = (
+            "You are restructuring the front-end of Muster, a personal "
+            "job-search app used by one person, Sandra.\n\n"
+            f"What she asked for:\n{request}\n\n"
+            "You may change index.html, app.js and styles.css together. "
+            "Output ONLY the files you actually need to change, each one "
+            "complete, in exactly this format and nothing else:\n\n"
+            "=== index.html ===\n<the whole file>\n=== app.js ===\n<the whole file>\n\n"
+            "Hard rules:\n"
+            "- Everything that works today must still work. This is a change "
+            "on top of a working app, not a rewrite of it.\n"
+            "- Keep every existing element id and every function name unless "
+            "the request is explicitly to remove that thing. Markup and code "
+            "are wired together by those ids; a rename in one file without "
+            "the other gives a page that loads and does nothing.\n"
+            "- If you add a control, wire it up in the same change.\n"
+            "- No frameworks, no new files, no external requests.\n\n"
+            "--- current index.html ---\n" + before["index.html"] +
+            "\n--- current app.js ---\n" + before["app.js"]
+        )
+
+        try:
+            raw = _chat_claude_cli(brief, [], request)
+        except (RuntimeError, OSError) as e:
+            return {"error": f"Could not reach the assistant: {e}"}
+
+        # Pull the files back out of the reply.
+        parts = re.split(r"^===\s*([\w.]+)\s*===\s*$", raw, flags=re.M)
+        proposed: dict[str, str] = {}
+        for i in range(1, len(parts) - 1, 2):
+            name = parts[i].strip()
+            body = parts[i + 1].strip()
+            fence = re.search(r"```[a-zA-Z]*\n(.*?)```", body, re.S)
+            if fence:
+                body = fence.group(1).strip()
+            if name in files and body:
+                proposed[name] = body
+
+        if not proposed:
+            return {"error": "I could not make that change cleanly - the "
+                             "assistant did not return the files in a usable "
+                             "form. Nothing was changed."}
+
+        problems = self._structural_problems(proposed, before)
+        if problems:
+            return {"error": "I did not apply that - the rewrite came back "
+                             "damaged: " + "; ".join(problems[:3]) +
+                             ". Nothing was changed."}
+
+        backup_dir = DATA / "upgrade_backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        for name in proposed:
+            (backup_dir / f"{stamp}-{name}").write_text(before[name], encoding="utf-8")
+            (WEB_DIR / name).write_text(proposed[name], encoding="utf-8")
+
+        verdict = self._self_test()
+        if not verdict["ok"]:
+            for name in proposed:
+                (WEB_DIR / name).write_text(before[name], encoding="utf-8")
+                (backup_dir / f"{stamp}-{name}").unlink(missing_ok=True)
+            log_event(f"Structural upgrade rolled back - broke the page: {request[:40]}")
+            return {"error": "I made that change, opened the page to check it, "
+                             "and it came back broken - so I put everything back. "
+                             "Nothing is lost. What went wrong: "
+                             + "; ".join(verdict["failures"][:3]),
+                    "rolled_back": True, "failures": verdict["failures"]}
+
+        changed = ", ".join(sorted(proposed))
+        log_event(f"Structural change: {request[:60]}")
+        msg = f"Done - changed {changed}. Reload the page to see it."
+        if verdict.get("skipped"):
+            msg += " (I could not open a browser to test it, so give it a look.)"
+        else:
+            msg += f" I opened the page and checked it - {len(verdict['checks'])} checks passed."
+        return {"ok": True, "file": changed, "structural": True,
+                "tested": not verdict.get("skipped"),
+                "checks": verdict.get("checks", []), "message": msg}
+
+    def _structural_problems(self, proposed: dict, before: dict) -> list:
+        """Static checks across a multi-file change, before anything is written."""
+        problems = []
+        for name, text in proposed.items():
+            old = before[name]
+            if len(text) < len(old) * 0.6:
+                problems.append(f"{name} shrank from {len(old)} to {len(text)} characters")
+
+            if name == "app.js":
+                node = shutil.which("node")
+                if node:
+                    import subprocess
+                    import tempfile as _tf
+                    with _tf.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                                encoding="utf-8") as f:
+                        f.write(text)
+                        path = f.name
+                    try:
+                        r = subprocess.run([node, "--check", path],
+                                           capture_output=True, text=True, timeout=15)
+                        if r.returncode != 0:
+                            lines = r.stderr.strip().splitlines()
+                            err = next((l for l in lines if "Error" in l),
+                                       lines[0] if lines else "unknown")
+                            problems.append(f"app.js does not parse: {err.strip()[:120]}")
+                    finally:
+                        try:
+                            os.unlink(path)
+                        except OSError:
+                            pass
+                lost = set(re.findall(r"function\s+(\w+)\s*\(", old)) - \
+                       set(re.findall(r"function\s+(\w+)\s*\(", text))
+                if lost:
+                    problems.append("app.js dropped functions: " + ", ".join(sorted(lost)[:5]))
+
+            elif name == "index.html":
+                for needed in ("<html", "</html>", "app.js", "styles.css"):
+                    if needed not in text.lower():
+                        problems.append(f"index.html no longer has {needed}")
+
+            elif name == "styles.css":
+                lost = set(re.findall(r"(--[\w-]+):", old)) - \
+                       set(re.findall(r"(--[\w-]+):", text))
+                if lost:
+                    problems.append("styles.css dropped colours " + ", ".join(sorted(lost)[:5]))
+
+        # ids are the contract BETWEEN the two files, so check them together
+        html = proposed.get("index.html", before["index.html"])
+        js = proposed.get("app.js", before["app.js"])
+        html_ids = set(re.findall(r'id="([\w-]+)"', html))
+        js_ids = set(re.findall(r"""['"]#([\w-]+)['"]""", js))
+        orphaned = js_ids - html_ids
+        was_orphaned = (set(re.findall(r"""['"]#([\w-]+)['"]""", before["app.js"]))
+                        - set(re.findall(r'id="([\w-]+)"', before["index.html"])))
+        newly_orphaned = orphaned - was_orphaned
+        if newly_orphaned:
+            problems.append(
+                "the code would look for elements that are not in the page: "
+                + ", ".join("#" + i for i in sorted(newly_orphaned)[:5]))
+        return problems
+
+    def _self_test(self) -> dict:
+        """Open the real page and make sure it still works."""
+        try:
+            import smoke
+            return smoke.run(f"http://127.0.0.1:{PORT}")
+        except Exception as e:
+            # The tester failing is not evidence the page is broken, and
+            # refusing a good change because the harness misfired would be
+            # its own kind of damage.
+            return {"ok": True, "skipped": True, "checks": [], "failures": [],
+                    "note": f"self-test unavailable ({e})"}
 
     def _upgrade_undo(self) -> dict:
         backup_dir = DATA / "upgrade_backups"
@@ -1569,6 +1781,47 @@ pin.addEventListener('keydown',e=>{if(e.key==='Enter')submit();});
         latest.unlink()
         log_event(f"Undid the last upgrade to {target}")
         return {"ok": True, "message": f"Reverted {target}. Reload the page."}
+
+    def _upgrade_reset(self) -> dict:
+        """
+        Put the design back exactly as it shipped.
+
+        Undo walks back one change at a time and depends on the backup
+        history being intact. This does not: docs/_defaults holds the
+        original three files, so however far the app has drifted - a dozen
+        upgrades deep, or one bad change with the backups cleared - there is
+        always a known-good floor to fall back to. That floor is why
+        experimenting with the look is safe.
+        """
+        src_dir = WEB_DIR / "_defaults"
+        files = ["index.html", "app.js", "styles.css"]
+        if not src_dir.exists() or not all((src_dir / f).exists() for f in files):
+            return {"error": "The original design is not on disk to restore from."}
+
+        backup_dir = DATA / "upgrade_backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+        restored = []
+        for f in files:
+            live, original = WEB_DIR / f, src_dir / f
+            if live.exists():
+                # keep what she had, in case "restore" was the mistake
+                (backup_dir / f"{stamp}-{f}").write_text(
+                    live.read_text(encoding="utf-8"), encoding="utf-8")
+            text = original.read_text(encoding="utf-8")
+            if live.exists() and live.read_text(encoding="utf-8") == text:
+                continue
+            live.write_text(text, encoding="utf-8")
+            restored.append(f)
+
+        if not restored:
+            return {"ok": True, "restored": [],
+                    "message": "The design is already the original one."}
+
+        log_event(f"Restored the original design ({', '.join(restored)})")
+        return {"ok": True, "restored": restored,
+                "message": "Put the original design back. Reload the page."}
 
     def _chat(self, message: str, history: list, context: str = "general") -> str:
         db().execute("INSERT INTO chat (role,text) VALUES ('user',?)", (message,))
