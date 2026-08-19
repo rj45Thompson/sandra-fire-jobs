@@ -1362,25 +1362,54 @@ pin.addEventListener('keydown',e=>{if(e.key==='Enter')submit();});
         if not request.strip():
             return {"error": "Say what you would like changed."}
 
-        # Three kinds of request, three files. Check BEHAVIOUR first - "bug",
-        # "not working", "should update" - because a broken bug report is the
-        # most costly thing to misroute (it becomes a doomed CSS rewrite that
-        # can only fail). Wording is next, by quoted text or verbs of speech.
-        # Everything else - colour, size, spacing, roundness, theme - is CSS.
-        behaviour = re.search(
-            r"\b(bug|broken|doesn'?t work|does not work|not working|isn'?t "
-            r"updat|not updat|fix|glitch|error|wrong|stuck|freeze|frozen|"
-            r"crash|hang|button (does|doesn)|click|should (update|refresh|"
-            r"show|save|clear))\b", request, re.I)
-        quoted = re.search(r'["“‘\']([^"”’\']{4,})["”’\']', request)
-        wording = re.search(
-            r"\b(say|says|saying|word|words|wording|reword|rename|renamed|"
-            r"heading|headline|title|caption|label|spelling|typo|call it|"
-            r"greeting|message|sentence|phrase|text)\b", request, re.I)
+        # Three kinds of request, three files. Getting this wrong is not
+        # cosmetic: a behaviour bug routed to CSS becomes a doomed rewrite
+        # that can only fail, which is what made self-upgrade look broken
+        # in the first place.
+        #
+        # Order is not simply "behaviour first" - "fix the typo in the
+        # title" contains 'fix' but is a wording change, so unambiguous
+        # wording words are checked before behaviour gets a turn. Softer
+        # wording words (message, text) are checked last, after behaviour,
+        # since "the message does not send" is a behaviour bug that happens
+        # to contain 'message'.
 
-        if behaviour:
+        # Unmistakably about the words on the page, whatever else it says.
+        wording_strong = re.search(
+            r"\b(typo|spelling|misspell\w*|mis-spell\w*|reword\w*|"
+            r"rewrite the (text|wording)|wording|rename\w*|call it|"
+            r"says?|saying)\b", request, re.I)
+
+        # Unmistakably about something not behaving. The stems below have
+        # no trailing \b - "not updat" has to match "not updating", and a
+        # word boundary right after "t" can never match inside that word,
+        # which is why "the count is not updating" used to miss entirely.
+        behaviour = re.search(
+            r"\b(bug|broken|glitch|crash\w*|hang\w*|frozen|freeze|stuck|"
+            r"unresponsive|dead button|fails? to)\b|"
+            r"does ?n[o']?t work|do(es)? nothing|doing nothing|"
+            r"no(t|thing) happens?|"
+            r"isn'?t updat|is not updat|not updat|"
+            r"isn'?t refresh|not refresh|"
+            r"does ?n[o']?t (work|send|save|open|show|load|respond|"
+            r"update|refresh|appear)|"
+            r"won'?t (work|send|save|open|show|load|update|refresh|appear)|"
+            r"\bshould (update|refresh|show|save|clear|work)\b",
+            request, re.I)
+
+        quoted = re.search(r'["“‘\']([^"”’\']{4,})["”’\']', request)
+        # Deliberately NOT "text" on its own - "make the text bigger" or
+        # "the text should be darker" are about how it looks, not what it
+        # says, and a bare "text" trigger routed both to the wrong file.
+        wording_soft = re.search(
+            r"\b(word|words|heading|headline|title|caption|label|"
+            r"greeting|message|sentence|phrase)\b", request, re.I)
+
+        if wording_strong:
+            target = "index.html"
+        elif behaviour:
             target = "app.js"
-        elif quoted or wording:
+        elif quoted or wording_soft:
             target = "index.html"
         else:
             target = "styles.css"
