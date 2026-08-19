@@ -123,16 +123,47 @@ def spawn(args, name: str):
         return None
 
 
+def port_owner() -> int | None:
+    """PID listening on our port, or None. The honest answer to 'is it down?'"""
+    if os.name != "nt":
+        return None
+    r = subprocess.run(
+        ["powershell", "-NoProfile", "-Command",
+         f"(Get-NetTCPConnection -LocalPort {PORT} -State Listen "
+         "-ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess"],
+        capture_output=True, text=True)
+    out = (r.stdout or "").strip()
+    return int(out) if out.isdigit() else None
+
+
 def stop_all() -> None:
+    """
+    Stop the engine and SAY SO ONLY IF IT ACTUALLY STOPPED.
+
+    This used to lie. The kill command was built from two concatenated
+    strings and only the first was an f-string, so the '{{' and '}}' meant
+    to escape into single braces stayed doubled. PowerShell read
+    'ForEach-Object {{ ... }}' as a scriptblock that returns another
+    scriptblock - so Stop-Process never ran, nothing was killed, and this
+    function logged "engine stopped" regardless. The engine kept serving,
+    invisibly, and a later restart quietly reused the old process with the
+    old code - which is how a config change can appear to do nothing at all.
+    """
     STOP_FLAG.write_text("stop", encoding="utf-8")
     log("stop flag set - watchdog will exit and leave the engine down")
-    if os.name == "nt":
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             f"Get-NetTCPConnection -LocalPort {PORT} -State Listen -EA SilentlyContinue |"
-             " ForEach-Object {{ Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue }}"],
-            capture_output=True)
-    log("engine stopped")
+
+    pid = port_owner()
+    if pid is None:
+        log("engine stopped (nothing was listening)")
+        return
+
+    subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True)
+    for _ in range(20):
+        time.sleep(0.25)
+        if port_owner() is None:
+            log(f"engine stopped (pid {pid})")
+            return
+    log(f"COULD NOT STOP the engine - pid {port_owner()} is still on port {PORT}")
 
 
 def main() -> None:

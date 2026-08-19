@@ -69,6 +69,34 @@
           </div>
         </div>
 
+        <!-- Only ever shown on the public GitHub copy. The engine serving
+             this same file at home hides it, because you are already there. -->
+        <div class="card" id="open-at-home" hidden style="margin-bottom:18px">
+          <h3>Open Muster on your computer</h3>
+          <p class="hint">This public page is just a preview - it cannot see your
+             résumé, your applications or your chat. Those live on the computer at
+             home, and this button takes you straight there.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px">
+            <a class="btn" id="go-home" href="http://127.0.0.1:8770/">Open Muster</a>
+            <button class="btn quiet" id="edit-home">Use a different address</button>
+          </div>
+          <details id="home-editor" style="margin-top:16px">
+            <summary style="cursor:pointer;color:var(--pink-deep);font-weight:600;font-size:13.5px">Where is Muster running?</summary>
+            <p class="hint" style="margin-top:12px">
+              On the computer itself, leave this as it is. From your phone or another
+              device on the same wifi, use that computer's address on the network -
+              Muster prints it when it starts, something like
+              <code>http://192.168.1.42:8770</code>. It will ask for your PIN once.</p>
+            <div class="row" style="align-items:end;margin-top:12px">
+              <div class="field" style="margin:0;flex:1">
+                <label>Address of the computer running Muster</label>
+                <input type="text" id="home-url" placeholder="http://192.168.1.42:8770">
+              </div>
+              <button class="btn" id="save-home" type="button">Save</button>
+            </div>
+          </details>
+        </div>
+
         <div class="banner pink" id="setup-banner">
           <span class="bi">🌺</span>
           <div>

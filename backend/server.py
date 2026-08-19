@@ -13,13 +13,18 @@ Stdlib only. No pip install required to boot.
 """
 
 import base64
+import hmac
+import http.cookies
+import ipaddress
 import json
 import os
+import secrets
 import re
 import shutil
 import sqlite3
 import sys
 import threading
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone, date
@@ -63,6 +68,27 @@ def load_env() -> dict:
 ENV = load_env()
 PORT = int(ENV.get("API_PORT", 8770))
 TOKEN = ENV.get("API_TOKEN", "")
+
+# Which interface to listen on. The default keeps the engine invisible to
+# everything but this machine. Set BIND_HOST=0.0.0.0 to let other devices on
+# the same home network reach it - a phone, a laptop in another room.
+BIND_HOST = ENV.get("BIND_HOST", "127.0.0.1").strip() or "127.0.0.1"
+
+# The address ranges a home network actually uses. Spelled out rather than
+# using ipaddress.is_private, which also returns True for the documentation
+# ranges (203.0.113.0/24 and friends) - those are not anyone's home LAN, and
+# treating them as trusted would widen this rule for no reason. Carrier-grade
+# NAT (100.64.0.0/10) is deliberately absent too: it is neither private nor
+# global, and it is an ISP's shared space, not this house.
+HOME_NETWORKS = [ipaddress.ip_network(n) for n in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",   # RFC1918
+    "169.254.0.0/16",                                   # link-local
+    "fc00::/7", "fe80::/10",                            # IPv6 ULA + link-local
+)]
+
+# The PIN a NEW device has to enter once before it is allowed in. Only ever
+# asked of devices arriving over the network; this machine is already trusted.
+ACCESS_PIN = ENV.get("ACCESS_PIN", "").strip()
 ALLOW_ORIGINS = [
     "https://rj45thompson.github.io",
     "http://localhost:8000",
@@ -75,6 +101,17 @@ ALLOW_ORIGINS = [
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS profile (
     key TEXT PRIMARY KEY, value TEXT);
+
+-- Devices allowed in over the home network. A device proves itself once with
+-- the PIN and is remembered by a random token in a cookie, so Sandra's phone
+-- asks once and not every time.
+CREATE TABLE IF NOT EXISTS devices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token TEXT UNIQUE NOT NULL,
+    name TEXT,
+    ip TEXT,
+    first_seen TEXT DEFAULT CURRENT_TIMESTAMP,
+    last_seen TEXT DEFAULT CURRENT_TIMESTAMP);
 
 CREATE TABLE IF NOT EXISTS certs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -126,6 +163,7 @@ CREATE TABLE IF NOT EXISTS chat (
     role TEXT, text TEXT, at TEXT DEFAULT CURRENT_TIMESTAMP);
 """
 
+_PIN_TRIES: dict[str, list[float]] = {}
 _local = threading.local()
 
 
@@ -558,6 +596,190 @@ class Handler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             return {}
 
+    # ── who is allowed to talk to this engine ──────────────────────────
+    #
+    # Two rules, checked in this order, and the first one is not negotiable:
+    #
+    #   1. The caller's IP must be on a private network - this machine, or
+    #      something on the same home LAN. A public address is refused
+    #      outright, PIN or no PIN. A home router will not route outside
+    #      traffic inward on its own, but that is the router's promise, not
+    #      ours; if it is ever misconfigured, port-forwarded by accident or
+    #      exposed by UPnP, this check still holds. Defence that does not
+    #      depend on someone else's settings being right.
+    #
+    #   2. Anything arriving over the network - i.e. not from this machine -
+    #      has to have registered once with the PIN. This machine itself is
+    #      trusted without a PIN: whoever is sitting at it can open the files
+    #      directly anyway, so a prompt would be theatre.
+    #
+    # This engine runs the assistant and rewrites its own front-end, so the
+    # blast radius of a stranger reaching it is real. Hence refusing by
+    # default and opening up deliberately, rather than the other way round.
+
+    def _send_unlock(self) -> None:
+        """The one screen a new device sees before anything else."""
+        page = """<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Muster</title><style>
+:root{color-scheme:light dark}
+body{margin:0;min-height:100vh;display:grid;place-items:center;
+ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+ background:#FFF8F0;color:#2B1B2E}
+@media (prefers-color-scheme:dark){body{background:#1A1020;color:#FCEEF6}}
+.box{width:min(92vw,380px);padding:32px;border-radius:22px;background:#fff;
+ box-shadow:0 18px 44px rgba(214,16,106,.14);text-align:center}
+@media (prefers-color-scheme:dark){.box{background:#241630}}
+h1{font-size:22px;margin:0 0 6px}p{color:#6B5570;font-size:14.5px;margin:0 0 20px}
+@media (prefers-color-scheme:dark){p{color:#C4A9CE}}
+input{width:100%;box-sizing:border-box;padding:13px;font-size:19px;text-align:center;
+ letter-spacing:.3em;border:1px solid #EBD9CE;border-radius:14px;background:transparent;
+ color:inherit;margin-bottom:12px}
+button{width:100%;padding:13px;font-size:15px;font-weight:600;border:0;cursor:pointer;
+ border-radius:99px;background:#FF2E88;color:#fff}
+.err{color:#D94F4F;font-size:13.5px;min-height:19px;margin-top:10px}
+</style></head><body><div class="box">
+<div style="font-size:34px">&#128274;</div>
+<h1>New device</h1>
+<p>Enter the PIN from Muster to use it on this device. You will only be asked once.</p>
+<input id="pin" type="text" inputmode="numeric" autocomplete="one-time-code"
+       placeholder="PIN" autofocus>
+<button id="go">Unlock</button>
+<div class="err" id="err"></div>
+</div><script>
+const go=document.getElementById('go'),pin=document.getElementById('pin'),err=document.getElementById('err');
+async function submit(){
+  err.textContent='';go.disabled=true;
+  try{
+    const r=await fetch('/device/register',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({pin:pin.value,name:navigator.userAgent.slice(0,60)})});
+    const d=await r.json();
+    if(d.ok){location.reload();return;}
+    err.textContent=d.error||'That PIN did not work.';
+  }catch(e){err.textContent='Could not reach Muster.';}
+  go.disabled=false;pin.value='';
+}
+go.onclick=submit;
+pin.addEventListener('keydown',e=>{if(e.key==='Enter')submit();});
+</script></body></html>"""
+        body = page.encode("utf-8")
+        self.send_response(401)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _register_device(self, b: dict) -> None:
+        """Trade the right PIN for a token this device keeps."""
+        ip = self._client_ip()
+        if self._ip_kind() == "outside":
+            return self._send({"error": "outside the home network"}, 403)
+        if not ACCESS_PIN:
+            return self._send({"error": "no ACCESS_PIN is set in .env"}, 403)
+
+        # Slow brute force to a crawl. A PIN is short by design, so without
+        # this a script on the LAN could walk the whole space in seconds.
+        now = time.time()
+        tries = [t for t in _PIN_TRIES.get(ip, []) if now - t < 300]
+        if len(tries) >= 5:
+            wait = int(300 - (now - tries[0]))
+            _PIN_TRIES[ip] = tries
+            return self._send({"error": f"Too many tries. Wait {wait}s."}, 429)
+
+        if not hmac.compare_digest(str(b.get("pin", "")).strip(), ACCESS_PIN):
+            tries.append(now)
+            _PIN_TRIES[ip] = tries
+            log_event(f"Wrong PIN from {ip} on the home network")
+            return self._send({"error": "That PIN did not work."}, 403)
+
+        _PIN_TRIES.pop(ip, None)
+        token = secrets.token_urlsafe(32)
+        name = str(b.get("name", "")).strip()[:80] or "a device"
+        db().execute("INSERT INTO devices (token,name,ip) VALUES (?,?,?)",
+                     (token, name, ip))
+        db().commit()
+        log_event(f"New device registered on the home network: {name} ({ip})")
+
+        body = json.dumps({"ok": True}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        # A year, so she is not asked again. Lax keeps it off cross-site
+        # requests; the cookie is useless to another origin anyway.
+        self.send_header("Set-Cookie",
+                         f"muster_device={token}; Max-Age=31536000; Path=/; SameSite=Lax")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _client_ip(self) -> str:
+        return self.client_address[0] if self.client_address else ""
+
+    def _ip_kind(self) -> str:
+        """'self' (this machine), 'lan' (same home network), or 'outside'."""
+        try:
+            addr = ipaddress.ip_address(self._client_ip())
+        except ValueError:
+            return "outside"
+        if addr.is_loopback:
+            return "self"
+        return "lan" if any(addr in net for net in HOME_NETWORKS) else "outside"
+
+    def _device_token(self) -> str:
+        raw = self.headers.get("Cookie")
+        if not raw:
+            return ""
+        try:
+            jar = http.cookies.SimpleCookie()
+            jar.load(raw)
+        except http.cookies.CookieError:
+            return ""
+        m = jar.get("muster_device")
+        return m.value if m else ""
+
+    def _known_device(self) -> bool:
+        tok = self._device_token()
+        if not tok:
+            return False
+        row = db().execute("SELECT id FROM devices WHERE token=?", (tok,)).fetchone()
+        if not row:
+            return False
+        db().execute("UPDATE devices SET last_seen=CURRENT_TIMESTAMP, ip=? WHERE id=?",
+                     (self._client_ip(), row["id"]))
+        db().commit()
+        return True
+
+    def _network_gate(self, path: str) -> bool:
+        """True to continue. Otherwise a response has already been written."""
+        kind = self._ip_kind()
+
+        if kind == "outside":
+            log_event(f"Refused a connection from outside the home network ({self._client_ip()})")
+            self._send({"error": "Muster only answers devices on your own home network."}, 403)
+            return False
+
+        if kind == "self" or path in ("/health", "/device/register"):
+            return True
+
+        if self._known_device():
+            return True
+
+        if not ACCESS_PIN:
+            # Reachable over the LAN but no PIN was ever set. Refuse rather
+            # than quietly serving everything to the whole network - an open
+            # door nobody chose is worse than one that will not open yet.
+            self._send({"error": "This device is not registered, and no ACCESS_PIN "
+                                 "is set in .env for it to register with."}, 403)
+            return False
+
+        # A browser asking for a page gets the unlock screen; anything else
+        # (a fetch from our own JS) gets a 401 it can act on.
+        if self.command == "GET" and "text/html" in (self.headers.get("Accept") or ""):
+            self._send_unlock()
+        else:
+            self._send({"error": "unregistered device", "needs_pin": True}, 401)
+        return False
+
     def _authed(self) -> bool:
         """
         The token exists to stop OTHER websites driving this engine. It is not
@@ -654,6 +876,8 @@ class Handler(BaseHTTPRequestHandler):
             self._safe_error(e)
 
     def _do_GET(self, p):
+        if not self._network_gate(p):
+            return
         if p == "/" or not p.startswith(("/health", "/profile", "/certs", "/employers",
                                          "/postings", "/applications", "/stats", "/scan",
                                          "/chat", "/upload")):
@@ -724,9 +948,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def _do_POST(self):
         p = self.path.split("?")[0]
+        if not self._network_gate(p):
+            return
+        b = self._body()
+
+        if p == "/device/register":
+            return self._register_device(b)
+
         if not self._authed():
             return self._send({"error": "bad token"}, 401)
-        b = self._body()
 
         if p == "/profile":
             for k, v in b.items():
@@ -1537,6 +1767,19 @@ def _chat_anthropic(system: str, history: list, message: str) -> str:
 
 
 # ─────────────────────────── main ──────────────────────────────
+def lan_ip() -> str:
+    """This machine's address on the home network, for other devices to use."""
+    import socket
+    try:
+        sk = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sk.connect(("10.255.255.255", 1))   # no packet is sent; just picks the route
+        ip = sk.getsockname()[0]
+        sk.close()
+        return ip
+    except OSError:
+        return ""
+
+
 def main() -> None:
     db()
     if not db().execute("SELECT COUNT(*) c FROM employers").fetchone()["c"]:
@@ -1545,14 +1788,27 @@ def main() -> None:
         seed_sources()
 
     tokset = TOKEN and TOKEN != "change-me-to-something-random"
+
+    if BIND_HOST in ("0.0.0.0", "::"):
+        ip = lan_ip()
+        network_line = (f"http://{ip}:{PORT}  <- other devices on your home wifi"
+                        if ip else "listening on every interface")
+        pin_line = ("PIN set - a new device registers once, then is remembered"
+                    if ACCESS_PIN else
+                    "NO ACCESS_PIN SET - other devices will be refused")
+    else:
+        network_line = "this machine only (set BIND_HOST=0.0.0.0 in .env to share)"
+        pin_line = "not needed - nothing but this machine can reach the engine"
     banner = f"""
   +----------------------------------------------+
   |   MUSTER  ::  local engine v{VERSION}            |
   +----------------------------------------------+
 
    API      http://127.0.0.1:{PORT}
+   Network  {network_line}
    Data     {DATA}
    Auth     {"token required" if tokset else "OPEN - set API_TOKEN in .env"}
+   Devices  {pin_line}
    Gmail    {"app password loaded" if ENV.get("GMAIL_APP_PASSWORD") else "not configured"}
    Chat     {ENV.get("CHAT_PROVIDER", "ollama")}
 
@@ -1572,7 +1828,7 @@ def main() -> None:
         daemon_threads = True
 
     Handler.timeout = 120   # a stalled client socket gets reclaimed, not held forever
-    MusterServer(("127.0.0.1", PORT), Handler).serve_forever()
+    MusterServer((BIND_HOST, PORT), Handler).serve_forever()
 
 
 if __name__ == "__main__":

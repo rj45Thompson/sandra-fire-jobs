@@ -158,6 +158,51 @@ $('#btn-connect').onclick = async () => {
   if (await ping()) refreshAll();
 };
 
+/* ---------- the public copy points you at the real thing ----------
+   A page served over https cannot FETCH http://127.0.0.1 - mixed content and
+   private-network rules block it, which is why the public copy has no live
+   data. It can still NAVIGATE there: a top-level navigation is not a
+   subresource request, so none of those rules apply. So the public page's job
+   is simply to hand you over to the engine, and the engine takes it from
+   there. Verified end to end, https page -> engine, before this was built. */
+const HOME_URL_KEY = 'muster.home';
+const DEFAULT_HOME = 'http://127.0.0.1:8770';
+
+function homeUrl() {
+  const saved = (localStorage.getItem(HOME_URL_KEY) || '').trim();
+  return (saved || DEFAULT_HOME).replace(/\/+$/, '');
+}
+
+function setupOpenAtHome() {
+  const card = $('#open-at-home');
+  if (!card || SELF_HOSTED) return;   // already home; nothing to offer
+  card.hidden = false;
+
+  const link = $('#go-home'), field = $('#home-url');
+  const paint = () => { if (link) link.href = homeUrl() + '/'; };
+  if (field) field.value = localStorage.getItem(HOME_URL_KEY) || '';
+  paint();
+
+  if ($('#edit-home')) $('#edit-home').onclick = () => {
+    const d = $('#home-editor');
+    if (d) { d.open = true; $('#home-url')?.focus(); }
+  };
+
+  if ($('#save-home')) $('#save-home').onclick = () => {
+    let v = (field.value || '').trim();
+    if (v && !/^https?:\/\//i.test(v)) v = 'http://' + v;   // "192.168.1.42:8770" is fine to type
+    if (v && !/^https?:\/\/[^\s/]+/i.test(v)) {
+      alert('That does not look like an address. It should look like http://192.168.1.42:8770');
+      return;
+    }
+    if (v) localStorage.setItem(HOME_URL_KEY, v.replace(/\/+$/, ''));
+    else localStorage.removeItem(HOME_URL_KEY);
+    paint();
+    alert(v ? 'Saved. "Open Muster" will go to ' + homeUrl()
+            : 'Cleared - back to this computer (' + DEFAULT_HOME + ').');
+  };
+}
+
 /* ---------- profile: résumé-driven, gaps chased in chat ---------- */
 async function loadGaps() {
   if (!ONLINE) return;
@@ -840,6 +885,7 @@ async function refreshAll() {
   restoreChat();
   loadSources();
   setupTalkButtons();
+  setupOpenAtHome();
   if (await ping()) refreshAll();
   setInterval(ping, 20000);
 })();
