@@ -18,6 +18,21 @@ const CFG = {
 
 let ONLINE = false;
 
+// Was a real address ever explicitly saved via Connect? If not, and this
+// isn't the engine's own origin, a network attempt is guaranteed to fail
+// (mixed content / private network access blocks an https page from ever
+// reaching an http://127.0.0.1 address) - so there is no point making it.
+const HAS_CUSTOM_API = !SELF_HOSTED && !!localStorage.getItem('muster.api');
+
+// On RJ's own machine, "start the engine" is something the reader can act
+// on immediately. Anywhere else - Sandra's phone, this same page loaded
+// from the public GitHub Pages mirror - that instruction points at their
+// own device's loopback address, which means nothing to them. Same
+// situation, different actionable message.
+const OFFLINE_MSG = SELF_HOSTED
+  ? 'The engine is not running yet. Open a terminal on this computer and start it, then reload this page.'
+  : "This is the public preview - live chat and everything else only runs on the computer where Muster is installed. Ask RJ to have it open, or open http://127.0.0.1:8770 on that machine.";
+
 /* ---------- tiny helpers ---------- */
 const $  = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -94,6 +109,10 @@ $('#btn-theme').onclick = () => {
 
 /* ---------- connection ---------- */
 async function ping() {
+  if (!SELF_HOSTED && !HAS_CUSTOM_API) {
+    setConn(false, 'Public preview');
+    return false;
+  }
   try {
     const h = await api('/health');
     setConn(true, h.version ? `Engine v${h.version}` : 'Connected');
@@ -174,7 +193,7 @@ async function askProfile(text) {
   addMsg('me', text, box);
   const inp = $('#chat-input-profile');
   if (inp) { inp.value = ''; inp.style.height = 'auto'; }
-  if (!ONLINE) { addMsg('bot', 'The engine is not running yet.', box); return; }
+  if (!ONLINE) { addMsg('bot', OFFLINE_MSG, box); return; }
   addPending(box);
   try {
     const r = await api('/profile/chat', { method: 'POST', body: JSON.stringify({ message: text }) });
@@ -359,7 +378,7 @@ function renderJobs() {
 $('#job-filter').addEventListener('input', renderJobs);
 
 async function startApply(url) {
-  if (!ONLINE) { alert('The engine is not running yet.'); return; }
+  if (!ONLINE) { alert(OFFLINE_MSG); return; }
   if (!confirm('Open this posting and fill it with your details for review?\n\n' + url)) return;
   try {
     const r = await api('/apply/start', { method: 'POST', body: JSON.stringify({ url }) });
@@ -373,7 +392,7 @@ async function startApply(url) {
 }
 
 async function scan() {
-  if (!ONLINE) { alert('The engine is not running yet. Open the app at http://127.0.0.1:8770.'); return; }
+  if (!ONLINE) { alert(OFFLINE_MSG); return; }
   const btns = [$('#btn-scan2')];
   btns.forEach(b => b && (b.disabled = true, b.textContent = 'Scanning…'));
   try {
@@ -522,7 +541,7 @@ async function askSources(text) {
   addMsg('me', text, SRC_BOX);
   const inp = $('#chat-input-sources');
   if (inp) { inp.value = ''; inp.style.height = 'auto'; }
-  if (!ONLINE) { addMsg('bot', 'The engine is not running yet. Open the app at http://127.0.0.1:8770', SRC_BOX); return; }
+  if (!ONLINE) { addMsg('bot', OFFLINE_MSG, SRC_BOX); return; }
   addPending(SRC_BOX);
   try {
     const r = await api('/sources/chat', { method: 'POST', body: JSON.stringify({ message: text }) });
@@ -683,7 +702,7 @@ async function send(input, box) {
   LS.set(key, log.slice(-12));
 
   if (!ONLINE) {
-    addMsg('bot', 'The engine is not running yet. Open the app at http://127.0.0.1:8770', box);
+    addMsg('bot', OFFLINE_MSG, box);
     return;
   }
 
