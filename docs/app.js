@@ -73,7 +73,6 @@ const TITLES = {
   profile: ['Profile & documents', 'Résumé, details and certifications - all in one place'],
   jobs:   ['Jobs', 'Every employer, watched'],
   apps:   ['Applications', 'Submitted, in review, and replies'],
-  chat:   ['Chat', 'Ask anything about the search'],
   upgrade: ['Upgrade me', 'Change how this app looks and reads'],
   inbox: ['Inbox', 'Replies, interviews and rejections'],
 };
@@ -171,6 +170,30 @@ const DEFAULT_HOME = 'http://127.0.0.1:8770';
 function homeUrl() {
   const saved = (localStorage.getItem(HOME_URL_KEY) || '').trim();
   return (saved || DEFAULT_HOME).replace(/\/+$/, '');
+}
+
+/* ---------- the Super chat: always there ----------
+   Hiding it is remembered, because someone who wants the room back wants
+   it back tomorrow too. On a narrow screen it is an overlay instead of a
+   column, so the same two buttons do slightly different jobs and both
+   just toggle one class on the shell. */
+function setupSuperChat() {
+  const shell = document.querySelector('.shell');
+  if (!shell) return;
+  const narrow = () => window.matchMedia('(max-width:1200px)').matches;
+
+  if (LS.get('chatHidden', false)) shell.classList.add('chat-hidden');
+
+  const close = $('#sc-toggle'), open = $('#sc-open');
+  if (close) close.onclick = () => {
+    if (narrow()) shell.classList.remove('chat-open');
+    else { shell.classList.add('chat-hidden'); LS.set('chatHidden', true); }
+  };
+  if (open) open.onclick = () => {
+    if (narrow()) shell.classList.add('chat-open');
+    else { shell.classList.remove('chat-hidden'); LS.set('chatHidden', false); }
+    $('#chat-input')?.focus();
+  };
 }
 
 function setupOpenAtHome() {
@@ -713,11 +736,14 @@ async function loadStats() {
 /* ---------- chat ---------- */
 /* Two boxes - one on the dashboard, one on the Chat panel - sharing a
    single conversation, so a question asked in either appears in both. */
+// #msgs is the Super chat - always on screen, whatever tab she is on. The
+// others are conveniences that sit next to the thing they are about; they
+// keep their own short history so the Jobs chat and the Profile chat do not
+// bleed into each other.
 const BOXES = [
-  { msgs: '#msgs',         input: '#chat-input',         send: '#btn-send',         ctx: 'general'   },
-  { msgs: '#msgs-mini',    input: '#chat-input-mini',    send: '#btn-send-mini',    ctx: 'general'   },
-  { msgs: '#msgs-jobs',    input: '#chat-input-jobs',    send: '#btn-send-jobs',    ctx: 'jobs'      },
-  { msgs: '#msgs-profile', input: '#chat-input-profile', send: null, ctx: 'profile'   },
+  { msgs: '#msgs',         input: '#chat-input',         send: '#btn-send',      ctx: 'general' },
+  { msgs: '#msgs-jobs',    input: '#chat-input-jobs',    send: '#btn-send-jobs', ctx: 'jobs'    },
+  { msgs: '#msgs-profile', input: '#chat-input-profile', send: null,             ctx: 'profile' },
 ];
 
 function addMsg(role, text, only) {
@@ -919,6 +945,7 @@ async function refreshAll() {
   loadSources();
   setupTalkButtons();
   setupOpenAtHome();
+  setupSuperChat();
   if (await ping()) refreshAll();
   setInterval(ping, 20000);
 })();

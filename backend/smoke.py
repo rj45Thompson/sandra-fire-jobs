@@ -33,7 +33,6 @@ REQUIRED_PANELS = {
     "jobs": "#jobs-body",
     "apps": "#apps-body",
     "inbox": "#inbox-list",
-    "chat": "#msgs",
     "upgrade": "#msgs-upgrade",
 }
 
@@ -41,7 +40,7 @@ REQUIRED_PANELS = {
 REQUIRED_CONTROLS = [
     ("#nav", "the navigation rail"),
     ("#drop-resume", "the résumé upload"),
-    ("#chat-input", "the chat box"),
+    ("#chat-input", "the Super chat box"),
     ("#btn-send", "the chat send button"),
     ("#chat-input-profile", "the profile chat box"),
     ("#chat-input-upgrade", "the upgrade chat box"),
@@ -137,15 +136,11 @@ def run(url: str = "http://127.0.0.1:8770", timeout_ms: int = 15000) -> dict:
                 else:
                     checks.append(f"the {panel} tab opens")
 
-            # 4. typing into the chat must not throw. The loop above left us
-            #    on whichever tab ran last, so open the chat tab first - a
-            #    box on a hidden panel is not visible and cannot be filled,
-            #    which says nothing about whether it works.
+            # 4. The Super chat has to still be usable after all that tab
+            #    clicking - that is the whole point of it being a fixed
+            #    column rather than a tab. If it is only reachable from one
+            #    screen, it is not a Super chat.
             try:
-                tab = page.query_selector('#nav button[data-panel="chat"]')
-                if tab:
-                    tab.click()
-                    page.wait_for_timeout(180)
                 box = page.query_selector("#chat-input")
                 if box:
                     box.fill("self test", timeout=4000)

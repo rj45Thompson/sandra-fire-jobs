@@ -25,6 +25,7 @@ import sqlite3
 import sys
 import threading
 import time
+import traceback
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone, date
@@ -1605,6 +1606,150 @@ pin.addEventListener('keydown',e=>{if(e.key==='Enter')submit();});
                 "backup": f"{stamp}-{target}", "tested": not verdict.get("skipped"),
                 "checks": verdict.get("checks", []), "message": msg}
 
+    def _run_chat_action(self, reply: str) -> str:
+        """
+        Carry out whatever the assistant said it was going to do.
+
+        The app is a front end to Claude, so the conversation has to be able
+        to ACT - otherwise every answer ends in "now go to the Jobs tab and
+        press Find jobs", which is the thing this is supposed to spare her.
+        The assistant appends one JSON object saying what it wants done; this
+        runs it and replaces the JSON with plain English about what happened.
+
+        Only the actions below are possible. Anything else in that JSON is
+        ignored rather than guessed at, and nothing here submits an
+        application - filling stops before Send, always, so the last word on
+        anything going to an employer is hers.
+        """
+        # Brace-matched, not regex-matched. Several actions carry a nested
+        # object ("fields", "places"), and a regex for a flat {...} matches
+        # the INNER one - so the action was never seen, and the raw JSON was
+        # left sitting in the reply for Sandra to read. Found exactly that
+        # way: the details saved, and the JSON showed up on screen anyway.
+        block = span = None
+        for start in (i for i, c in enumerate(reply) if c == "{"):
+            depth = 0
+            for end in range(start, len(reply)):
+                if reply[end] == "{":
+                    depth += 1
+                elif reply[end] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            cand = json.loads(reply[start:end + 1])
+                        except ValueError:
+                            break
+                        if isinstance(cand, dict) and ("action" in cand or "upgrade" in cand):
+                            block, span = cand, (start, end + 1)
+                        break
+        if block is None:
+            return reply
+
+        spoken = reply[:span[0]].strip()
+        # the older single-key form, kept working
+        if "upgrade" in block and "action" not in block:
+            block = {"action": "upgrade", "request": block["upgrade"]}
+
+        action = str(block.get("action", "")).lower()
+        try:
+            outcome = self._do_chat_action(action, block)
+        except Exception as e:
+            traceback.print_exc()
+            outcome = (f"I tried to do that and it failed ({type(e).__name__}). "
+                       "Nothing was changed - worth trying again.")
+
+        return (spoken + "\n\n" + outcome).strip() if spoken else outcome
+
+    def _do_chat_action(self, action: str, block: dict) -> str:
+        if action == "scan":
+            r = self._scan()
+            return (f"Checked {r.get('checked', 0)} places and found "
+                    f"{r.get('found', 0)} new. They are in the Jobs tab.")
+
+        if action == "apply":
+            url = str(block.get("url", "")).strip()
+            if not url.startswith("http"):
+                return ("I do not have the real address for that posting, so I "
+                        "have not opened anything. Paste me the link and I will "
+                        "fill it in.")
+            rep = self._apply_start(url)
+            if not rep.get("ok"):
+                return f"That did not work: {rep.get('error', 'unknown problem')}"
+            filled = len(rep.get("filled", []))
+            note = " ".join(rep.get("notes", []))
+            out = (f"Filled in {filled} field{'' if filled == 1 else 's'} and left "
+                   "the browser open for you - read it over and press submit "
+                   "yourself. I never send one on your behalf.")
+            return out + (f"\n\nOne thing: {note}" if note else "")
+
+        if action == "remember":
+            fields = block.get("fields") or {}
+            valid = {k for k, _ in REQUIRED_FIELDS}
+            saved = []
+            for k, v in fields.items():
+                if k in valid and str(v).strip():
+                    db().execute(
+                        "INSERT INTO profile (key,value) VALUES (?,?) "
+                        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                        (k, str(v).strip()))
+                    saved.append(k.replace("_", " "))
+            if not saved:
+                return "I did not catch anything I could record there."
+            db().commit()
+            log_event(f"Profile from chat: {', '.join(saved)}")
+            return "Noted: " + ", ".join(saved) + "."
+
+        if action == "watch":
+            places = block.get("places") or []
+            added = 0
+            for pl in places:
+                url = str(pl.get("url", "")).strip()
+                if not url.startswith("http"):
+                    continue
+                db().execute(
+                    "INSERT OR IGNORE INTO sources (name,url,kind) VALUES (?,?,?)",
+                    (str(pl.get("name", url))[:120], url,
+                     str(pl.get("kind", "general"))[:20]))
+                added += 1
+            if not added:
+                return "I could not add that as a place to look."
+            db().commit()
+            log_event(f"Added {added} place(s) to look, from chat")
+            return (f"Added {added} place{'' if added == 1 else 's'} to look. "
+                    "I will check there from now on.")
+
+        if action == "cert":
+            name = str(block.get("name", "")).strip()
+            if not name:
+                return "I did not catch which certification you meant."
+            db().execute(
+                "INSERT INTO certs (name,status,expiry,source) VALUES (?,?,?,'chat')",
+                (name[:120], str(block.get("status", "Complete"))[:30],
+                 str(block.get("expiry", "") or "")[:20]))
+            db().commit()
+            log_event(f"Certification recorded: {name}")
+            return f"Recorded {name}. It counts toward your match score now."
+
+        if action == "schedule":
+            try:
+                hrs = int(block.get("hours", 0) or 0)
+            except (TypeError, ValueError):
+                return "I did not catch how often you wanted that."
+            db().execute("INSERT INTO profile (key,value) VALUES "
+                         "('scan_every_hours',?) ON CONFLICT(key) DO UPDATE SET "
+                         "value=excluded.value", (str(hrs),))
+            db().commit()
+            log_event(f"Automatic job search set to every {hrs}h" if hrs
+                      else "Automatic job search turned off")
+            return (f"I will check for new postings every {hrs} hours."
+                    if hrs else "Turned the automatic search off.")
+
+        if action == "upgrade":
+            res = self._upgrade(str(block.get("request", "")))
+            return res.get("message") or res.get("error", "")
+
+        return ""
+
     def _upgrade_structural(self, request: str) -> dict:
         """
         Change the shape of the app, not just its skin.
@@ -1878,14 +2023,35 @@ pin.addEventListener('keydown',e=>{if(e.key==='Enter')submit();});
             "fire jobs. Raise this when it is relevant, but do not lecture about it "
             "every message.\n\n"
 
-            "YOU CAN CHANGE THIS WEBSITE. If she asks for anything about how "
-            "the app looks, reads or behaves - colours, theme, wording, text "
-            "size, layout - do not explain how. Reply with one short sentence "
-            "saying you are doing it, then on a NEW LINE output exactly this "
-            "JSON and nothing after it: "
-            '{"upgrade": "her request restated clearly"}'
-            "The app then performs the change and reloads. Only for appearance "
-            "and wording, never for job data."
+            "YOU CAN ACTUALLY DO THINGS, NOT JUST TALK ABOUT THEM. This app is "
+            "a front end to you. Sandra should never have to go and find the "
+            "right tab and press the right button - if she asks for something "
+            "on this list, DO IT rather than telling her how. Reply with one "
+            "short sentence saying what you are doing, then on a NEW LINE a "
+            "single JSON object and nothing after it:\n"
+            '{"action": "scan"}                     - look for new postings now\n'
+            '{"action": "apply", "url": "https://..."} - open a posting and fill '
+            "the application in for her. It STOPS before submitting; she reads "
+            "it over and sends it herself.\n"
+            '{"action": "remember", "fields": {"city": "Onoway"}} - record '
+            "details about her. The field name must be one of exactly these, "
+            "or it is silently dropped: "
+            + ", ".join(k for k, _ in REQUIRED_FIELDS) + ".\n"
+            '{"action": "watch", "places": [{"name": "Job Bank - nursing, Alberta", '
+            '"url": "https://...", "kind": "healthcare"}]} - add a place to look. '
+            "kind is fire, healthcare or general.\n"
+            '{"action": "cert", "name": "NFPA 1001 Level I", "status": "Complete"} '
+            "- record a certification. status is Complete, In progress, Partial "
+            "or Expired.\n"
+            '{"action": "schedule", "hours": 12} - check for jobs automatically '
+            "every N hours. 0 turns it off.\n"
+            '{"action": "upgrade", "request": "restated clearly"} - change how '
+            "this app looks, reads or is laid out. Appearance and wording only, "
+            "never job data.\n\n"
+            "Only act when she is actually asking for it. If she is thinking out "
+            "loud, or asking what you think, just answer - do not fire an action "
+            "at her. Never invent a URL for an application: if you do not have "
+            "the real address, say so and ask."
 
             "Applications close on fixed dates and Alberta municipal hiring clusters "
             "in the fall, so timing matters more than volume. If she asks what to do "
@@ -1922,14 +2088,7 @@ pin.addEventListener('keydown',e=>{if(e.key==='Enter')submit();});
                      "If you are using Ollama, check it is running:  ollama serve\n"
                      "Or set CHAT_PROVIDER=anthropic with an API key in .env.")
 
-        # did she ask for the site itself to change?
-        pat = chr(123) + r'\s*"upgrade"\s*:\s*"([^"]{4,300})"\s*' + chr(125)
-        m = re.search(pat, reply)
-        if m:
-            spoken = reply[:m.start()].strip() or "Changing that now."
-            res = self._upgrade(m.group(1))
-            tail = res.get("message") or res.get("error", "")
-            reply = spoken + chr(10) + chr(10) + tail
+        reply = self._run_chat_action(reply)
 
         db().execute("INSERT INTO chat (role,text) VALUES ('assistant',?)", (reply,))
         db().commit()

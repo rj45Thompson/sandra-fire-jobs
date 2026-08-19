@@ -33,7 +33,6 @@
       <button data-panel="jobs"><span class="ico">◎</span><span class="lbl">Jobs</span><span class="tag" id="tag-jobs">0</span></button>
       <button data-panel="apps"><span class="ico">✈</span><span class="lbl">Applications</span><span class="tag" id="tag-apps">0</span></button>
       <button data-panel="inbox"><span class="ico">✉</span><span class="lbl">Inbox</span><span class="tag" id="tag-inbox">0</span></button>
-      <button data-panel="chat"><span class="ico">✿</span><span class="lbl">Chat</span></button>
       <button data-panel="upgrade"><span class="ico">✧</span><span class="lbl">Upgrade me</span></button>
     </nav>
 
@@ -128,20 +127,6 @@
             <option value="24">Once a day</option>
           </select>
           <span id="schedule-note" style="font-size:13px;color:var(--ink-soft)"></span>
-        </div>
-
-        <div class="card dash-chat" style="margin-bottom:18px">
-          <h3>Ask me anything</h3>
-          <p class="hint">Fire, healthcare, or any job at all. I know your profile and what is open.</p>
-          <div class="chat mini">
-            <div class="msgs" id="msgs-mini">
-              <div class="msg bot">Hi Sandra. Ask me what is open right now, what an employer needs, or anything about the nursing registration.</div>
-            </div>
-            <div class="composer">
-              <textarea id="chat-input-mini" placeholder="Type a question…" rows="1"></textarea>
-              <button class="btn" id="btn-send-mini">Send</button>
-            </div>
-          </div>
         </div>
 
         <div class="grid g2">
@@ -440,27 +425,25 @@
       </section>
 
       <!-- ── CHAT ── -->
-      <section class="panel" id="p-chat" hidden>
-        <div class="chat">
-          <div class="msgs" id="msgs">
-            <div class="msg sys">Muster runs on your machine. This conversation is stored locally.</div>
-            <div class="msg bot">Hi Sandra. I'm here to help you find work.
-
-Fire service, healthcare, or anything else — I can look up who is hiring, tell you what each employer requires, draft a cover letter in your voice, and keep track of every application and reply.
-
-If your nursing registration is the sticking point, ask me about it. There is work open to you without it, and there is a route through it, and they are different conversations.
-
-A good place to start: tell me what kind of work you want, or ask me what is open right now.</div>
           </div>
-          <div class="composer">
-            <textarea id="chat-input" placeholder="Ask about departments, requirements, deadlines, or ask for a cover letter…" rows="1"></textarea>
-            <button class="btn" id="btn-send">Send</button>
-          </div>
-        </div>
-      </section>
-
-    </div>
   </main>
+  <aside class="superchat" id="superchat">
+    <div class="sc-head">
+      <div><b>Ask me anything</b><span>I can also do it for you</span></div>
+      <button class="sc-toggle" id="sc-toggle" type="button" aria-label="Hide the chat">&#10005;</button>
+    </div>
+    <div class="msgs" id="msgs">
+      <div class="msg sys">Runs on your machine. This conversation stays here.</div>
+      <div class="msg bot">Hi Sandra. Ask me anything, and where I can, I will just do it - look for jobs, fill an application in, remember something about you, or change this app itself.
+
+I never send an application for you. I fill it in and leave it open so you read it over and press send yourself.</div>
+    </div>
+    <div class="composer">
+      <textarea id="chat-input" placeholder="Ask me, or tell me to do it&#8230;" rows="1"></textarea>
+      <button class="btn" id="btn-send">Send</button>
+    </div>
+  </aside>
+  <button class="sc-open" id="sc-open" type="button" aria-label="Open the chat">&#128172;</button>
 </div>
 
 <script src="app.js?v=20260818100408"></script>
