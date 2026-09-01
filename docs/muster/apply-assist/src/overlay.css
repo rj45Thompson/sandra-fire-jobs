@@ -1,0 +1,58 @@
+/* Apply Assist — the only styles injected into someone else's page.
+   Deliberately tiny and heavily namespaced: a job portal's own CSS is not
+   ours to disturb, and a field we highlight must stay readable in whatever
+   theme the site uses. */
+
+.aa-filled {
+  outline: 2px solid #0E7C57 !important;
+  outline-offset: 1px !important;
+  background-color: rgba(14, 124, 87, .06) !important;
+  transition: outline-color .3s ease;
+}
+
+#aa-banner {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483647;            /* above the portal's own modals */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 11px 12px 11px 15px;
+  border-radius: 10px;
+  background: #16241E;
+  color: #EAF3EE;
+  font: 500 13.5px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, .3);
+}
+
+#aa-banner .aa-msg { flex: 1; }
+
+#aa-banner .aa-btn {
+  flex: none;
+  background: #2E9E6B;
+  color: #08150F;
+  border: 0;
+  border-radius: 7px;
+  padding: 6px 12px;
+  font: 600 13px system-ui, sans-serif;
+  cursor: pointer;
+}
+#aa-banner .aa-btn:hover { background: #3FBE8C; }
+
+#aa-banner .aa-x {
+  flex: none;
+  background: none;
+  border: 0;
+  color: #8FA79B;
+  font-size: 14px;
+  line-height: 1;
+  padding: 4px;
+  cursor: pointer;
+}
+#aa-banner .aa-x:hover { color: #EAF3EE; }
+
+@media (prefers-reduced-motion: reduce) {
+  .aa-filled { transition: none; }
+}

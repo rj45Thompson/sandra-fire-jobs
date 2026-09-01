@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Apply Assist</title>
+<style>
+  :root{
+    --paper:#FBFBF9; --card:#fff; --ink:#1A1D1B; --soft:#5C6360; --faint:#8E9491;
+    --line:#E3E6E3; --live:#0E7C57; --live-soft:#E4F1EB;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --paper:#141715; --card:#1C201E; --ink:#E9EDEA; --soft:#A2AAA6;
+           --faint:#727A76; --line:#2A302C; --live:#3FBE8C; --live-soft:#152C22; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;width:310px;background:var(--paper);color:var(--ink);
+       font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+  header{padding:14px 15px 10px;border-bottom:1px solid var(--line)}
+  h1{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em}
+  .who{color:var(--soft);font-size:12.5px;margin-top:2px}
+  main{padding:13px 15px 15px}
+  .scan{background:var(--live-soft);color:var(--live);border-radius:8px;
+        padding:9px 11px;font-size:12.5px;margin-bottom:11px;font-weight:500}
+  .scan.none{background:var(--card);color:var(--soft);border:1px solid var(--line);font-weight:400}
+  button{width:100%;border:0;border-radius:8px;padding:10px;font:600 14px system-ui,sans-serif;cursor:pointer}
+  .primary{background:var(--live);color:#fff}
+  .primary:disabled{opacity:.5;cursor:default}
+  .ghost{background:none;color:var(--soft);border:1px solid var(--line);margin-top:8px;font-weight:500}
+  .ghost:hover{color:var(--ink)}
+  label.row{display:flex;align-items:center;gap:8px;margin:11px 0 0;font-size:12.5px;color:var(--soft)}
+  .note{margin:12px 0 0;font-size:11.5px;color:var(--faint);line-height:1.45}
+  .err{color:#B3391B;font-size:12.5px;margin-top:9px}
+</style>
+</head>
+<body>
+  <header>
+    <h1>Apply Assist</h1>
+    <div class="who" id="who">No profile yet</div>
+  </header>
+  <main>
+    <div class="scan" id="scan">Checking this page…</div>
+    <button class="primary" id="fill" disabled>Fill this page</button>
+    <label class="row"><input type="checkbox" id="overwrite"> Overwrite fields I already filled</label>
+    <button class="ghost" id="edit">Edit my profile</button>
+    <div class="err" id="err" hidden></div>
+    <p class="note">Fills only. It never submits, never asks for a password, and
+      your profile stays on this computer.</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

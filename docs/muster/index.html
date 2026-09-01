@@ -1,0 +1,903 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="A workspace for running a job search: your profile, your resume, what you have sent, and an assistant that drafts the awkward parts.">
+<meta name="color-scheme" content="light dark">
+<title>Muster</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#FBFAF7; --card:#FFFFFF; --sunk:#F3F1EC;
+  --ink:#1C1B18; --soft:#5A574F; --faint:#8C887E;
+  --line:#E5E1D8; --line-soft:#F0EDE6;
+  --brick:#A8442A; --brick-soft:#F7E7E1;
+  --moss:#2A6F5F; --moss-soft:#E2F0EB;
+  --amber:#8A6410; --amber-soft:#F8EFD8;
+  --display:'Newsreader',Georgia,serif;
+  --sans:'Work Sans',system-ui,-apple-system,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  --rail:210px; --chat:370px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#141311; --card:#1C1B18; --sunk:#232220;
+    --ink:#EDEAE3; --soft:#A9A499; --faint:#7A756B;
+    --line:#2E2C27; --line-soft:#232220;
+    --brick:#E08A6E; --brick-soft:#331C15;
+    --moss:#6FBFA6; --moss-soft:#122A24;
+    --amber:#D6A544; --amber-soft:#2E2412;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#141311; --card:#1C1B18; --sunk:#232220;
+  --ink:#EDEAE3; --soft:#A9A499; --faint:#7A756B;
+  --line:#2E2C27; --line-soft:#232220;
+  --brick:#E08A6E; --brick-soft:#331C15;
+  --moss:#6FBFA6; --moss-soft:#122A24;
+  --amber:#D6A544; --amber-soft:#2E2412;
+}
+*{box-sizing:border-box}
+*,*::before,*::after{box-sizing:border-box}
+img{max-width:100%}
+[hidden]{display:none!important}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14.5px;line-height:1.55;-webkit-font-smoothing:antialiased}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--brick);outline-offset:2px;border-radius:4px}
+
+.shell{display:grid;grid-template-columns:var(--rail) minmax(0,1fr) var(--chat);min-height:100vh}
+.shell.chat-hidden{grid-template-columns:var(--rail) minmax(0,1fr) 0}
+.shell.chat-hidden .chatpane{display:none}
+
+.rail{border-right:1px solid var(--line);background:var(--card);display:flex;flex-direction:column;gap:2px;padding:18px 11px;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:9px;padding:0 7px 15px}
+.mark{width:30px;height:30px;border-radius:8px;background:var(--brick);display:grid;place-items:center;flex:none;
+  font-family:var(--display);font-size:16px;font-weight:600;color:#FFF8F5}
+.brand b{font-family:var(--display);font-size:17px;font-weight:600;display:block;line-height:1.15;letter-spacing:-.01em}
+.brand span{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+.navbtn{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;border:0;padding:8px 9px;border-radius:8px;color:var(--soft);cursor:pointer}
+.navbtn:hover{background:var(--sunk);color:var(--ink)}
+.navbtn[aria-current="true"]{background:var(--brick-soft);color:var(--brick);font-weight:600}
+.navbtn .n{margin-left:auto;font-family:var(--mono);font-size:10.5px;opacity:.7}
+.railfoot{margin-top:auto;padding-top:13px;border-top:1px solid var(--line-soft);display:flex;flex-direction:column;gap:7px}
+.status{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10.5px;color:var(--faint);padding:0 7px}
+.beacon{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
+.beacon.on{background:var(--moss);box-shadow:0 0 0 3px var(--moss-soft)}
+.beacon.off{background:var(--amber)}
+
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:baseline;gap:12px;padding:22px 28px 0;flex-wrap:wrap}
+.topbar h1{font-family:var(--display);font-size:24px;font-weight:600;letter-spacing:-.015em;margin:0;text-wrap:balance}
+.topbar .sub{color:var(--soft);font-size:13.5px}
+.push{margin-left:auto}
+.wrap{padding:16px 28px 44px;max-width:880px}
+
+.btn{border:0;border-radius:8px;padding:8px 15px;font-weight:600;font-size:13.5px;cursor:pointer;background:var(--brick);color:#FFF8F5}
+.btn.ghost{background:none;border:1px solid var(--line);color:var(--soft);font-weight:500}
+.btn.ghost:hover{color:var(--ink);border-color:var(--faint)}
+.btn.small{padding:5px 11px;font-size:12.5px}
+.btn[disabled]{opacity:.45;cursor:default}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin:0 0 13px}
+.card h3{font-family:var(--display);font-size:16px;font-weight:600;margin:0 0 7px}
+.card p{margin:0 0 9px;color:var(--soft)}
+.card p:last-child{margin:0}
+.eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:0 0 14px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:13px 15px}
+.stat .n{font-family:var(--display);font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
+.stat .l{font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin-top:2px}
+
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.fields .full{grid-column:1/-1}
+label.lbl{display:block;font-size:12.5px;color:var(--soft);margin-bottom:4px}
+input[type=text],input[type=email],input[type=tel],input[type=url],input[type=password],textarea,select{
+  width:100%;background:var(--paper);border:1px solid var(--line);border-radius:7px;padding:8px 10px;font-size:14px}
+textarea{resize:vertical;min-height:88px}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--brick)}
+.hint{font-size:12px;color:var(--faint);margin:4px 0 0}
+
+.drop{border:1.5px dashed var(--line);border-radius:10px;padding:18px;text-align:center;background:var(--sunk);cursor:pointer}
+.drop:hover{border-color:var(--brick)}
+.drop.has{border-style:solid;border-color:var(--moss);background:var(--moss-soft)}
+.drop .big{font-family:var(--display);font-size:15px;font-weight:600}
+.drop .sm{font-size:12.5px;color:var(--soft);margin-top:3px}
+
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:9px 10px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.tblwrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:11px}
+.pill{font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.pill.sent{background:var(--sunk);color:var(--soft)}
+.pill.replied{background:var(--moss-soft);color:var(--moss)}
+.pill.interview{background:var(--brick-soft);color:var(--brick)}
+.pill.rejected{background:var(--sunk);color:var(--faint)}
+.empty{color:var(--faint);font-size:13.5px;padding:16px 10px;text-align:center}
+
+pre.code{background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:11px 13px;
+  font-family:var(--mono);font-size:11.5px;overflow-x:auto;margin:9px 0 0;max-height:190px;white-space:pre-wrap;word-break:break-all}
+
+.chatpane{border-left:1px solid var(--line);background:var(--card);display:flex;flex-direction:column;height:100vh;position:sticky;top:0}
+.chathead{display:flex;align-items:center;gap:8px;padding:14px 15px;border-bottom:1px solid var(--line-soft)}
+.chathead b{font-family:var(--display);font-size:15px;font-weight:600;flex:1}
+.log{flex:1;overflow-y:auto;padding:15px;display:flex;flex-direction:column;gap:13px}
+.msg .who{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:4px}
+.msg .body{white-space:pre-wrap;overflow-wrap:anywhere}
+.msg.me .body{background:var(--sunk);border-radius:10px;padding:9px 12px}
+.msg.err .body{background:var(--brick-soft);color:var(--brick);border-radius:10px;padding:9px 12px;font-size:13.5px}
+.msg.think .body{color:var(--faint);font-style:italic}
+.composer{border-top:1px solid var(--line-soft);padding:10px 11px;display:flex;gap:7px;align-items:flex-end}
+.composer textarea{flex:1;min-height:38px;max-height:150px;background:var(--sunk);border-radius:9px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 15px 11px}
+.chip{background:var(--sunk);border:1px solid var(--line-soft);border-radius:99px;padding:5px 11px;font-size:12.5px;cursor:pointer;text-align:left}
+.chip:hover{border-color:var(--brick);color:var(--brick)}
+
+.fab{display:none;position:fixed;right:15px;bottom:15px;z-index:20;background:var(--brick);color:#FFF8F5;border:0;border-radius:99px;padding:12px 18px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.22);cursor:pointer}
+@media (max-width:1060px){
+  .shell,.shell.chat-hidden{grid-template-columns:var(--rail) minmax(0,1fr)}
+  .chatpane{position:fixed;inset:auto 0 0 0;height:78vh;z-index:30;border-left:0;border-top:1px solid var(--line);border-radius:13px 13px 0 0;display:none;box-shadow:0 -8px 34px rgba(0,0,0,.2)}
+  .shell.chat-open .chatpane{display:flex}
+  .fab{display:block}
+}
+@media (max-width:720px){
+  .shell,.shell.chat-hidden{grid-template-columns:1fr}
+  .rail{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;border-right:0;border-bottom:1px solid var(--line)}
+  .brand{padding:0 8px 0 0}
+  .railfoot{margin:0 0 0 auto;padding:0;border:0;flex-direction:row}
+  .navbtn{width:auto}
+  .topbar,.wrap{padding-left:16px;padding-right:16px}
+}
+</style>
+
+</head>
+<body>
+<div class="shell" id="shell">
+  <aside class="rail">
+    <div class="brand">
+      <div class="mark">M</div>
+      <div><b>Muster</b><span>job engine</span></div>
+    </div>
+    <nav id="nav"></nav>
+    <div class="railfoot">
+      <div class="status"><span class="beacon" id="beacon"></span><span id="statusText">starting…</span></div>
+      <button class="btn ghost small" id="theme">Theme</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <h1 id="ptitle">…</h1>
+      <div class="sub" id="psub"></div>
+      <button class="btn ghost small push" id="chatToggle">Hide chat</button>
+    </div>
+    <div class="wrap" id="panel"></div>
+  </main>
+
+  <aside class="chatpane" id="chatpane">
+    <div class="chathead">
+      <span class="beacon" id="beacon2"></span>
+      <b>Assistant</b>
+      <button class="btn ghost small" id="chatClear">Clear</button>
+    </div>
+    <div class="log" id="log"></div>
+    <div class="chips" id="chips"></div>
+    <div class="composer">
+      <textarea id="input" rows="1" placeholder="Ask, or paste a job posting…"></textarea>
+      <button class="btn" id="send">Send</button>
+    </div>
+  </aside>
+</div>
+<button class="fab" id="fab">Chat</button>
+
+<script>
+/* ------------------------------------------------------------------
+   Muster — a job engine you host, paired with the Apply Assist
+   extension that does the filling on the job site itself.
+
+   Everything lives in this browser's localStorage. Nothing is sent
+   anywhere except the questions you put to the assistant.
+   ------------------------------------------------------------------ */
+
+const $ = (s) => document.querySelector(s);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("muster:" + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("muster:" + k, JSON.stringify(v)); return true; } catch { return false; } }
+};
+
+let profile = store.get("profile", {});
+let apps = store.get("apps", []);
+let sample = null, mode = "checking", turns = [], ctl = null, route = "none";
+
+/* How the assistant reaches Claude. Three routes, best first:
+ *   claude — this page opened inside claude.ai, where Claude is already present.
+ *   relay  — a URL you point at your own backend; visitors need no key at all.
+ *            This is the route that turns Muster into something you can charge for.
+ *   key    — the visitor's own Anthropic key, held in this browser and sent
+ *            straight to api.anthropic.com. It never passes through Muster,
+ *            because Muster has no server to pass it through.
+ * Nothing here is a password and nothing is shared. */
+const ASSIST = {
+  relay: store.get("relay", ""),
+  key:   store.get("apiKey", ""),
+  model: store.get("model", "claude-sonnet-5")
+};
+
+/* ---------- profile fields: exactly what the extension fills ---------- */
+const FIELDS = [
+  { g: "You", f: [
+    ["firstName","First name"],["lastName","Last name"],
+    ["email","Email","email"],["phone","Phone","tel"]
+  ]},
+  { g: "Where", f: [
+    ["city","City"],["region","Province or state"],
+    ["postal","Postal code"],["country","Country"]
+  ]},
+  { g: "Links", f: [
+    ["linkedin","LinkedIn","url"],["github","GitHub","url"],["website","Portfolio","url"]
+  ]},
+  { g: "Work", f: [
+    ["currentTitle","Current title"],["currentCompany","Current company"],
+    ["yearsExperience","Years of experience"],
+    ["salary","Salary expectation","text","\"Negotiable\" is usually the better answer"],
+    ["availability","Availability","text","Say it as availability, never as needing to relocate"]
+  ]},
+  { g: "Standard questions", f: [
+    ["workAuth","Authorised to work?"],["sponsorship","Need sponsorship?"],
+    ["referral","How did you hear about us?"]
+  ]}
+];
+const KEYS = FIELDS.flatMap(g => g.f.map(f => f[0]));
+
+const PANELS = [
+  { id:"dash",    label:"Dashboard",   title:"Where things stand",  sub:"Everything out, and what came back." },
+  { id:"profile", label:"Profile",     title:"What gets filled in", sub:"The answers the extension types for you." },
+  { id:"apps",    label:"Applications",title:"What you have sent",  sub:"One row per application." },
+  { id:"connect", label:"Extension",   title:"Pair the extension",  sub:"Hand this profile to Apply Assist." },
+  { id:"assistant",label:"Assistant",  title:"Connect the assistant",sub:"Where the chat gets its answers." }
+];
+
+let current = PANELS.find(p => p.id === store.get("panel","")) || PANELS[0];
+
+/* ---------- nav ---------- */
+const nav = $("#nav");
+PANELS.forEach(p => {
+  const b = document.createElement("button");
+  b.className = "navbtn"; b.dataset.id = p.id;
+  b.append(p.label);
+  if (p.id === "apps") { const n = document.createElement("span"); n.className = "n"; n.id = "navCount"; b.append(n); }
+  b.onclick = () => go(p);
+  nav.append(b);
+});
+
+function go(p) {
+  current = p; store.set("panel", p.id);
+  $("#ptitle").textContent = p.title;
+  $("#psub").textContent = p.sub;
+  document.querySelectorAll(".navbtn").forEach(b => b.setAttribute("aria-current", String(b.dataset.id === p.id)));
+  const nc = $("#navCount"); if (nc) nc.textContent = apps.length || "";
+  const w = $("#panel"); w.innerHTML = "";
+  ({ dash: renderDash, profile: renderProfile, apps: renderApps, connect: renderConnect,
+     assistant: renderAssistant })[p.id](w);
+  renderChips();
+}
+
+/* ---------- dashboard ---------- */
+function renderDash(w) {
+  const sent = apps.length;
+  const replied = apps.filter(a => a.status === "replied" || a.status === "interview").length;
+  const interview = apps.filter(a => a.status === "interview").length;
+  const filled = KEYS.filter(k => profile[k]).length;
+
+  const g = document.createElement("div"); g.className = "grid4";
+  [[sent,"applications"],[replied,"replies"],[interview,"interviews"],
+   [`${filled}/${KEYS.length}`,"profile filled"]].forEach(([n,l]) => {
+    const d = document.createElement("div"); d.className = "stat";
+    d.innerHTML = `<div class="n"></div><div class="l"></div>`;
+    d.querySelector(".n").textContent = n; d.querySelector(".l").textContent = l;
+    g.append(d);
+  });
+  w.append(g);
+
+  const c = document.createElement("div"); c.className = "card";
+  c.innerHTML = '<p class="eyebrow">How this works</p>';
+  const p1 = document.createElement("p");
+  p1.textContent = "This page holds your profile, your resume and your application history. "
+    + "The Apply Assist extension reads that profile and fills it into job forms in your own browser, "
+    + "on the sites where you are already signed in. No password ever changes hands.";
+  const p2 = document.createElement("p");
+  p2.textContent = profile.resumeFile
+    ? `Resume saved: ${profile.resumeFile.name}. The extension attaches it to file uploads it recognises.`
+    : "No resume saved yet — add one on the Profile tab so the extension can attach it.";
+  c.append(p1, p2);
+  w.append(c);
+
+  const c2 = document.createElement("div"); c2.className = "card";
+  c2.innerHTML = '<p class="eyebrow">The assistant</p>';
+  const p3 = document.createElement("p");
+  p3.textContent = "Paste a job posting into the chat and it will tell you what to emphasise, draft the "
+    + "\"why this role\" answer against your actual background, or rewrite something you are stuck on. "
+    + "It sees your profile, so it will not ask you things you have already told it.";
+  c2.append(p3);
+  w.append(c2);
+}
+
+/* ---------- profile ---------- */
+function renderProfile(w) {
+  // resume upload first — it is the thing that matters most
+  const rc = document.createElement("div"); rc.className = "card";
+  rc.innerHTML = '<p class="eyebrow">Resume</p>';
+  const drop = document.createElement("div");
+  drop.className = "drop" + (profile.resumeFile ? " has" : "");
+  drop.innerHTML = `<div class="big"></div><div class="sm"></div>`;
+  const setDrop = () => {
+    drop.className = "drop" + (profile.resumeFile ? " has" : "");
+    drop.querySelector(".big").textContent = profile.resumeFile
+      ? profile.resumeFile.name : "Choose your resume";
+    drop.querySelector(".sm").textContent = profile.resumeFile
+      ? `${Math.round((profile.resumeFile.size||0)/1024)} KB · click to replace`
+      : "PDF or Word, under 5 MB";
+  };
+  setDrop();
+  const fi = document.createElement("input");
+  fi.type = "file"; fi.accept = ".pdf,.doc,.docx,application/pdf"; fi.hidden = true;
+  drop.onclick = () => fi.click();
+  fi.onchange = async () => {
+    const f = fi.files && fi.files[0];
+    if (!f) return;
+    if (f.size > 5 * 1024 * 1024) { drop.querySelector(".sm").textContent = "Over 5 MB — most portals reject those."; return; }
+    const data = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onerror = () => rej(new Error("Could not read that file."));
+      r.onload = () => res(String(r.result).split(",")[1]);
+      r.readAsDataURL(f);
+    }).catch(() => null);
+    if (!data) { drop.querySelector(".sm").textContent = "Could not read that file."; return; }
+    profile.resumeFile = { name: f.name, mimeType: f.type || "application/pdf", size: f.size, data };
+    if (!store.set("profile", profile)) {
+      drop.querySelector(".sm").textContent = "Too large to store in this browser. Try a smaller PDF.";
+      delete profile.resumeFile; return;
+    }
+    setDrop();
+  };
+  rc.append(drop, fi);
+  const rh = document.createElement("p"); rh.className = "hint";
+  rh.textContent = "Stored in this browser only. The extension needs the actual bytes to attach it — "
+    + "a file path would be useless, because a web page is not allowed to read one.";
+  rc.append(rh);
+  w.append(rc);
+
+  // the rest of the profile
+  FIELDS.forEach(group => {
+    const c = document.createElement("div"); c.className = "card";
+    const eb = document.createElement("p"); eb.className = "eyebrow"; eb.textContent = group.g;
+    c.append(eb);
+    const grid = document.createElement("div"); grid.className = "fields";
+    group.f.forEach(([k, label, type, hint]) => {
+      const cell = document.createElement("div");
+      const l = document.createElement("label"); l.className = "lbl"; l.textContent = label; l.htmlFor = k;
+      const i = document.createElement("input");
+      i.type = type || "text"; i.id = k; i.value = profile[k] || "";
+      i.oninput = () => { profile[k] = i.value.trim(); store.set("profile", profile); };
+      cell.append(l, i);
+      if (hint) { const h = document.createElement("p"); h.className = "hint"; h.textContent = hint; cell.append(h); }
+      grid.append(cell);
+    });
+    c.append(grid);
+    w.append(c);
+  });
+
+  const cl = document.createElement("div"); cl.className = "card";
+  const b = document.createElement("button"); b.className = "btn ghost small"; b.textContent = "Clear everything";
+  b.onclick = () => {
+    if (!confirm("Clear your whole profile, including the resume?")) return;
+    profile = {}; store.set("profile", profile); go(current);
+  };
+  cl.append(b);
+  w.append(cl);
+}
+
+/* ---------- applications ---------- */
+function renderApps(w) {
+  const add = document.createElement("div"); add.className = "card";
+  add.innerHTML = '<p class="eyebrow">Log an application</p>';
+  const grid = document.createElement("div"); grid.className = "fields";
+  const mk = (id, ph) => {
+    const i = document.createElement("input"); i.type = "text"; i.id = "n_" + id; i.placeholder = ph;
+    const d = document.createElement("div"); d.append(i); return d;
+  };
+  grid.append(mk("company", "Company"), mk("role", "Role"));
+  const sel = document.createElement("select"); sel.id = "n_status";
+  ["sent","replied","interview","rejected"].forEach(s => {
+    const o = document.createElement("option"); o.value = s; o.textContent = s; sel.append(o);
+  });
+  const sd = document.createElement("div"); sd.append(sel); grid.append(sd);
+  add.append(grid);
+  const ab = document.createElement("button"); ab.className = "btn small"; ab.textContent = "Add";
+  ab.style.marginTop = "11px";
+  ab.onclick = () => {
+    const company = $("#n_company").value.trim(), role = $("#n_role").value.trim();
+    if (!company) return;
+    apps.unshift({ company, role, status: sel.value, date: new Date().toISOString().slice(0,10) });
+    store.set("apps", apps); go(current);
+  };
+  add.append(ab);
+  w.append(add);
+
+  const wrap = document.createElement("div"); wrap.className = "tblwrap";
+  if (!apps.length) {
+    const e = document.createElement("div"); e.className = "empty";
+    e.textContent = "Nothing logged yet.";
+    wrap.append(e);
+  } else {
+    const t = document.createElement("table");
+    t.innerHTML = "<tr><th>Company</th><th>Role</th><th>Status</th><th>Date</th><th></th></tr>";
+    apps.forEach((a, idx) => {
+      const tr = document.createElement("tr");
+      const td = (txt) => { const d = document.createElement("td"); d.textContent = txt; return d; };
+      tr.append(td(a.company), td(a.role || "—"));
+      const st = document.createElement("td");
+      const pill = document.createElement("span"); pill.className = "pill " + a.status; pill.textContent = a.status;
+      st.append(pill); tr.append(st, td(a.date));
+      const x = document.createElement("td");
+      const xb = document.createElement("button"); xb.className = "btn ghost small"; xb.textContent = "Remove";
+      xb.onclick = () => { apps.splice(idx,1); store.set("apps", apps); go(current); };
+      x.append(xb); tr.append(x);
+      t.append(tr);
+    });
+    wrap.append(t);
+  }
+  w.append(wrap);
+}
+
+/* ---------- extension pairing ---------- */
+function renderConnect(w) {
+  const c = document.createElement("div"); c.className = "card";
+  c.innerHTML = '<p class="eyebrow">Step 1 — install</p>';
+  const p1 = document.createElement("p");
+  p1.textContent = "Apply Assist is not on the Chrome Web Store yet, so it installs by hand. "
+    + "Download the repository, unzip it, then open chrome://extensions, turn on Developer mode, "
+    + "choose Load unpacked, and pick the extension folder inside.";
+  const dl = document.createElement("a");
+  dl.className = "btn small"; dl.style.cssText = "margin-top:10px;display:inline-block;text-decoration:none";
+  dl.href = "https://github.com/rj45Thompson/muster/archive/refs/heads/main.zip";
+  dl.textContent = "Download the extension";
+  dl.rel = "noopener";
+  c.append(p1, dl);
+  w.append(c);
+
+  const c2 = document.createElement("div"); c2.className = "card";
+  c2.innerHTML = '<p class="eyebrow">Step 2 — hand it your profile</p>';
+  const p2 = document.createElement("p");
+  p2.textContent = "Copy this and paste it into the extension's options page. Automatic sync needs the "
+    + "backend that is still to be built, so for now this is the bridge — and it keeps your details on "
+    + "your own machine either way.";
+  const pre = document.createElement("pre"); pre.className = "code";
+  const payload = Object.assign({}, profile);
+  if (payload.resumeFile) {
+    payload.resumeFile = Object.assign({}, payload.resumeFile,
+      { data: `<${Math.round((payload.resumeFile.size||0)/1024)} KB of file, included when you copy>` });
+  }
+  pre.textContent = JSON.stringify(payload, null, 2);
+  const cb = document.createElement("button"); cb.className = "btn small"; cb.textContent = "Copy profile";
+  cb.style.marginTop = "10px";
+  cb.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(profile));
+      cb.textContent = "Copied";
+      setTimeout(() => { cb.textContent = "Copy profile"; }, 1600);
+    } catch { cb.textContent = "Copy failed — select the text above"; }
+  };
+  c2.append(p2, pre, cb);
+  w.append(c2);
+
+  const c3 = document.createElement("div"); c3.className = "card";
+  c3.innerHTML = '<p class="eyebrow">What the extension will and will not do</p>';
+  const p3 = document.createElement("p");
+  p3.textContent = "It fills forms and attaches your resume in your own browser session. It never asks for "
+    + "a password, never submits an application for you, and refuses to touch passwords, payment details, "
+    + "SIN or SSN, or any equal-opportunity question. Those are yours to answer deliberately.";
+  c3.append(p3);
+  w.append(c3);
+}
+
+/* ---------- assistant setup ---------- */
+function renderAssistant(w) {
+  const HOW = {
+    claude: ["Running inside Claude", "This page is open in claude.ai, so the assistant uses Claude directly. Nothing to set up, and no key needed."],
+    relay:  ["Using your relay", "Messages go to the endpoint below. Visitors need no key of their own."],
+    key:    ["Using your own key", "Messages go straight from this browser to Anthropic. Your key is stored in this browser only and is never sent anywhere else."],
+    none:   ["Not connected", "The rest of Muster works without this. The chat needs one of the two options below."]
+  };
+  const [head, blurb] = HOW[route] || HOW.none;
+
+  const c0 = document.createElement("div"); c0.className = "card";
+  c0.innerHTML = '<p class="eyebrow">Status</p>';
+  const h = document.createElement("p");
+  h.style.cssText = "font-weight:600;margin:0 0 4px";
+  h.textContent = head;
+  const bl = document.createElement("p"); bl.textContent = blurb;
+  c0.append(h, bl); w.append(c0);
+
+  const mk = (labelText, id, val, ph, type) => {
+    const f = document.createElement("div"); f.className = "fields";
+    f.style.marginTop = "12px";
+    const cell = document.createElement("div"); cell.className = "full";
+    const l = document.createElement("label"); l.className = "lbl";
+    l.textContent = labelText; l.htmlFor = id;
+    const i = document.createElement("input");
+    i.id = id; i.value = val || ""; i.placeholder = ph || ""; i.type = type || "text";
+    i.autocomplete = "off"; i.spellcheck = false;
+    cell.append(l, i); f.append(cell); return f;
+  };
+
+  const c1 = document.createElement("div"); c1.className = "card";
+  c1.innerHTML = '<p class="eyebrow">Option A — your own Anthropic key</p>';
+  const p1 = document.createElement("p");
+  p1.textContent = "Get one at console.anthropic.com. It is kept in this browser's storage and sent "
+    + "only to api.anthropic.com — Muster is a static page with no server to send it to. "
+    + "Anyone with access to this computer could read it, so use a key you can revoke.";
+  c1.append(p1,
+    mk("API key", "aKey", ASSIST.key, "sk-ant-…", "password"),
+    mk("Model", "aModel", ASSIST.model, "claude-sonnet-5"));
+
+  const c2 = document.createElement("div"); c2.className = "card";
+  c2.innerHTML = '<p class="eyebrow">Option B — a relay you host</p>';
+  const p2 = document.createElement("p");
+  p2.textContent = "A URL that accepts {system, messages, model} as JSON and answers with either "
+    + "an Anthropic-style event stream or {text}. Use this when you want visitors to chat without "
+    + "a key of their own. It takes precedence over the key above.";
+  c2.append(p2, mk("Relay endpoint", "aRelay", ASSIST.relay, "https://…/chat", "url"));
+
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:9px;flex-wrap:wrap;margin-top:14px";
+  const save = document.createElement("button"); save.className = "btn"; save.textContent = "Save and connect";
+  const off  = document.createElement("button"); off.className = "btn ghost"; off.textContent = "Disconnect";
+  const note = document.createElement("span");
+  note.style.cssText = "align-self:center;font-size:13px;color:var(--faint)";
+
+  save.onclick = async () => {
+    ASSIST.key   = $("#aKey").value.trim();
+    ASSIST.relay = $("#aRelay").value.trim();
+    ASSIST.model = $("#aModel").value.trim() || "claude-sonnet-5";
+    store.set("apiKey", ASSIST.key);
+    store.set("relay", ASSIST.relay);
+    store.set("model", ASSIST.model);
+    applyRoute(sample ? "claude" : ASSIST.relay ? "relay" : ASSIST.key ? "key" : "none");
+    note.textContent = route === "none" ? "Nothing entered." : "Connected.";
+    go(current);
+  };
+  off.onclick = () => {
+    ASSIST.key = ""; ASSIST.relay = "";
+    store.set("apiKey", ""); store.set("relay", "");
+    applyRoute(sample ? "claude" : "none");
+    go(current);
+  };
+  row.append(save, off, note);
+  c2.append(row);
+  w.append(c1, c2);
+
+  const c3 = document.createElement("div"); c3.className = "card";
+  c3.innerHTML = '<p class="eyebrow">What leaves this page</p>';
+  const p3 = document.createElement("p");
+  p3.textContent = "When you send a chat message, your profile details and the number of applications "
+    + "logged go with it, so the assistant does not ask for what you have already filled in. Your resume "
+    + "file does not — it stays in this browser for the extension to attach. Nothing is sent unless you "
+    + "press Send.";
+  c3.append(p3); w.append(c3);
+}
+
+/* ---------- theme + chat visibility ---------- */
+const savedTheme = store.get("theme", null);
+if (savedTheme) document.documentElement.setAttribute("data-theme", savedTheme);
+$("#theme").onclick = () => {
+  const now = document.documentElement.getAttribute("data-theme");
+  const dark = now ? now === "dark" : matchMedia("(prefers-color-scheme:dark)").matches;
+  const next = dark ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  store.set("theme", next);
+};
+const shell = $("#shell");
+if (store.get("chatHidden", false)) shell.classList.add("chat-hidden");
+const narrow = () => matchMedia("(max-width:1060px)").matches;
+const syncToggle = () => { $("#chatToggle").textContent = shell.classList.contains("chat-hidden") ? "Show chat" : "Hide chat"; };
+$("#chatToggle").onclick = () => {
+  if (narrow()) { shell.classList.toggle("chat-open"); return; }
+  shell.classList.toggle("chat-hidden");
+  store.set("chatHidden", shell.classList.contains("chat-hidden"));
+  syncToggle();
+};
+$("#fab").onclick = () => shell.classList.toggle("chat-open");
+syncToggle();
+
+/* ---------- the assistant ---------- */
+const log = $("#log");
+function bubble(cls, who, text) {
+  const d = document.createElement("div"); d.className = "msg " + cls;
+  const w = document.createElement("div"); w.className = "who"; w.textContent = who;
+  const b = document.createElement("div"); b.className = "body"; b.textContent = text;
+  d.append(w, b); log.append(d); log.scrollTop = log.scrollHeight; return b;
+}
+function setStatus(kind, text) {
+  const cls = kind === "on" ? "beacon on" : kind === "off" ? "beacon off" : "beacon";
+  $("#beacon").className = cls; $("#beacon2").className = cls; $("#statusText").textContent = text;
+}
+
+const CHIPS = {
+  dash:    ["What should I do next?", "How is my search going?"],
+  profile: ["Write my availability line", "What is missing from my profile?"],
+  apps:    ["Draft a follow-up for a quiet application", "Which of these should I chase?"],
+  connect: ["What does the extension actually do?"],
+  assistant: ["What can you help me with?"]
+};
+function renderChips() {
+  const c = $("#chips"); c.innerHTML = "";
+  (CHIPS[current.id] || []).forEach(t => {
+    const b = document.createElement("button"); b.className = "chip"; b.textContent = t;
+    b.onclick = () => { $("#input").value = t; if (narrow()) shell.classList.add("chat-open"); $("#input").focus(); };
+    c.append(b);
+  });
+}
+
+function charter() {
+  const known = KEYS.filter(k => profile[k]).map(k => `${k}: ${profile[k]}`).join("\n");
+  return "You are the assistant inside Muster, a job-application workspace. You help one person get "
+    + "applications out. Be concrete and brief: short paragraphs, no preamble, no filler. Ask at most one "
+    + "clarifying question, and only if you genuinely cannot proceed.\n\n"
+    + "You cannot browse, open files, send email, or fill forms yourself — a browser extension does the "
+    + "filling. If something needs doing out there, say plainly what to do, and draft the exact wording "
+    + "where that helps.\n\n"
+    + "Never invent facts about this person. If a detail is missing, write the sentence and mark the gap "
+    + "in square brackets.\n\n"
+    + "One standing rule about relocation: never frame them as someone who needs to relocate or wants "
+    + "relocation support. Write it as availability that is already true — \"available on site in <city>\", "
+    + "\"available to start immediately\". Framing it as a hurdle costs interviews.\n\n"
+    + (known ? "What you already know about them:\n" + known : "Their profile is still empty.")
+    + (profile.resumeFile ? `\nThey have a resume saved (${profile.resumeFile.name}), which you cannot read.` : "")
+    + `\nApplications logged: ${apps.length}.`;
+}
+
+const ERRS = {
+  not_granted:"You did not allow this page to use Claude, so the assistant is off for this visit.",
+  sampling_disabled:"Claude is not available on this account.",
+  not_declared:"This page is no longer set up to use Claude.",
+  capability_disabled:"The assistant cannot run in this view.",
+  capability_removed:"This viewer is too old to run the assistant.",
+  rate_limited:"Too many messages too quickly. Give it a minute.",
+  session_expired:"Your session expired — sign in again and reload.",
+  refused:"Claude declined that one. Try asking it differently.",
+  empty_completion:"Nothing came back. Ask for less at once.",
+  prompt_too_large:"This conversation got too long. Clear it and start again.",
+  invalid_request:"The page asked wrongly — that is a bug in the page.",
+  bad_key:"That key was rejected. Check it on console.anthropic.com and paste it again.",
+  no_credit:"That Anthropic account is out of credit. Top it up and try again.",
+  no_route:"The assistant is not connected yet. Open the Assistant tab to set it up.",
+  blocked:"The browser could not reach the API. An ad blocker or a strict network will do this.",
+  upstream_error:"The connection dropped. Try again."
+};
+const FATAL = new Set(["not_granted","sampling_disabled","not_declared","capability_disabled","capability_removed"]);
+
+function trim() {
+  let bytes = new Blob([charter()]).size;
+  const kept = [];
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const b = new Blob([turns[i].content]).size;
+    if (bytes + b > 46000) break;
+    bytes += b; kept.unshift(turns[i]);
+  }
+  while (kept.length && kept[0].role === "assistant") kept.shift();
+  return kept;
+}
+
+/* ---------- talking to Claude ----------
+ * One entry point, three routes. Each yields the same thing: a promise of the
+ * finished text, calling onText with the whole answer so far as it arrives. */
+
+function mkErr(code, message) {
+  return Object.assign(new Error(message || code), { code });
+}
+
+async function httpErr(res) {
+  let detail = "";
+  try { const j = await res.json(); detail = (j && j.error && j.error.message) || ""; } catch { /* not JSON */ }
+  let code = "upstream_error";
+  if (res.status === 401 || res.status === 403) code = "bad_key";
+  else if (res.status === 429) code = "rate_limited";
+  else if (res.status === 400 && /credit|balance/i.test(detail)) code = "no_credit";
+  else if (res.status === 400 || res.status === 422) code = "invalid_request";
+  return mkErr(code, detail || res.statusText);
+}
+
+/* Anthropic streams server-sent events. We want the text deltas and nothing else. */
+async function readSSE(res, onText) {
+  if (!res.body) throw mkErr("upstream_error", "no response body");
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "", out = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let nl;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (!line.startsWith("data:")) continue;
+      const raw = line.slice(5).trim();
+      if (!raw || raw === "[DONE]") continue;
+      let ev; try { ev = JSON.parse(raw); } catch { continue; }
+      if (ev.type === "content_block_delta" && ev.delta && typeof ev.delta.text === "string") {
+        out += ev.delta.text;
+        if (onText) onText({ text: out, delta: ev.delta.text });
+      } else if (ev.type === "error") {
+        const m = (ev.error && ev.error.message) || "";
+        throw mkErr(/credit|balance/i.test(m) ? "no_credit"
+                  : /rate/i.test(m) ? "rate_limited" : "upstream_error", m);
+      }
+    }
+  }
+  if (!out) throw mkErr("empty_completion");
+  return out;
+}
+
+async function askAnthropic(sys, msgs, opts) {
+  let res;
+  try {
+    res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST", signal: opts.signal,
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": ASSIST.key,
+        "anthropic-version": "2023-06-01",
+        // Without this the browser's preflight is refused. It is the documented
+        // opt-in for calling the API from a page rather than a server.
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: ASSIST.model, max_tokens: 1600, stream: true,
+        system: sys, messages: msgs
+      })
+    });
+  } catch (e) {
+    if (e && e.name === "AbortError") throw mkErr("cancelled");
+    throw mkErr("blocked", String(e && e.message || e));
+  }
+  if (!res.ok) throw await httpErr(res);
+  return readSSE(res, opts.onText);
+}
+
+/* A relay you host. It may stream SSE in Anthropic's shape, or simply answer
+ * with JSON — {text} or a Messages-API content array. Both are accepted so the
+ * backend can be the simplest thing that works. */
+async function askRelay(sys, msgs, opts) {
+  let res;
+  try {
+    res = await fetch(ASSIST.relay, {
+      method: "POST", signal: opts.signal,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ system: sys, messages: msgs, model: ASSIST.model, stream: true })
+    });
+  } catch (e) {
+    if (e && e.name === "AbortError") throw mkErr("cancelled");
+    throw mkErr("blocked", String(e && e.message || e));
+  }
+  if (!res.ok) throw await httpErr(res);
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("event-stream")) return readSSE(res, opts.onText);
+  const j = await res.json().catch(() => null);
+  const text = j && (typeof j.text === "string" ? j.text
+    : Array.isArray(j.content)
+      ? j.content.filter(b => b && b.type === "text").map(b => b.text).join("")
+      : "");
+  if (!text) throw mkErr("empty_completion");
+  if (opts.onText) opts.onText({ text, delta: text });
+  return text;
+}
+
+async function ask(msgs, opts) {
+  const sys = charter();
+  if (route === "claude") {
+    const r = await sample([{ role: "user", content: sys }, ...msgs],
+      { cache: false, signal: opts.signal, onText: opts.onText });
+    return r.text;
+  }
+  if (route === "relay") return askRelay(sys, msgs, opts);
+  if (route === "key")   return askAnthropic(sys, msgs, opts);
+  throw mkErr("no_route");
+}
+
+async function send() {
+  const box = $("#input"); const text = box.value.trim();
+  if (!text || mode !== "live" || ctl) return;
+  box.value = ""; box.style.height = "auto";
+  bubble("me","You",text);
+  turns.push({ role:"user", content:text });
+
+  const holder = bubble("think","Assistant","Thinking…");
+  ctl = new AbortController();
+  const btn = $("#send"); btn.textContent = "Stop"; btn.onclick = () => ctl && ctl.abort();
+
+  let streamed = false;
+  try {
+    const answer = await ask(trim(), {
+      signal: ctl.signal,
+      onText: ({ text }) => {
+        if (!streamed) { streamed = true; holder.parentElement.className = "msg"; }
+        holder.textContent = text; log.scrollTop = log.scrollHeight;
+      } });
+    turns.push({ role:"assistant", content:answer });
+  } catch (e) {
+    const code = (e && e.name === "AbortError") ? "cancelled"
+               : (e && e.code) || "upstream_error";
+    if (code === "cancelled") {
+      if (e.text) { holder.textContent = e.text + "\n\n[stopped]"; holder.parentElement.className = "msg"; }
+      else holder.parentElement.remove();
+    } else {
+      if (e && e.text) { holder.textContent = e.text; holder.parentElement.className = "msg"; }
+      else holder.parentElement.remove();
+      bubble("err","Problem", ERRS[code] || ERRS.upstream_error);
+      if (turns[turns.length-1] && turns[turns.length-1].role === "user") turns.pop();
+      if (FATAL.has(code)) { mode = "preview"; setStatus("off","assistant unavailable"); lock(); }
+    }
+  } finally {
+    ctl = null; const b = $("#send"); b.textContent = "Send"; b.onclick = send;
+  }
+}
+/* Called when a route dies mid-session. Fall through to the next one that is
+ * configured rather than going dark. */
+function lock() {
+  sample = null;
+  applyRoute(ASSIST.relay ? "relay" : ASSIST.key ? "key" : "none");
+}
+
+$("#send").onclick = send;
+$("#input").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+$("#input").addEventListener("input", e => { e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight,150) + "px"; });
+$("#chatClear").onclick = () => { turns = []; log.innerHTML = ""; greet(); };
+function greet() {
+  bubble("","Assistant","Paste a job posting and I will tell you what to lead with, or ask me to draft "
+    + "something. I can see your profile, so I will not ask for what you have already filled in.");
+}
+
+function applyRoute(r) {
+  route = r;
+  const btn = $("#send"), input = $("#input");
+  if (r === "none") {
+    mode = "preview";
+    setStatus("off", "assistant not connected");
+    input.disabled = true;
+    input.placeholder = "Connect the assistant to start.";
+    btn.disabled = false;
+    btn.textContent = "Connect";
+    btn.onclick = () => go(PANELS.find(p => p.id === "assistant"));
+    return;
+  }
+  mode = "live";
+  setStatus("on", r === "claude" ? "assistant live"
+                : r === "relay"  ? "assistant via relay"
+                :                  "assistant on your key");
+  input.disabled = false;
+  input.placeholder = "Ask, or paste a job posting…";
+  btn.disabled = false;
+  btn.textContent = "Send";
+  btn.onclick = send;
+}
+
+async function detectRoute() {
+  try { sample = window.claude ? await window.claude.use("sample") : null; } catch { sample = null; }
+  if (sample) return "claude";
+  if (ASSIST.relay) return "relay";
+  if (ASSIST.key)   return "key";
+  return "none";
+}
+
+/* ---------- boot ---------- */
+go(current); setStatus("", "connecting…"); greet();
+(async () => { applyRoute(await detectRoute()); })();
+</script>
+</body>
+</html>
