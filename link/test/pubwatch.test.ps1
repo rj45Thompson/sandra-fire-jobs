@@ -36,7 +36,7 @@ $body = [scriptblock]::Create($m.Groups[1].Value)
 
 Write-Host "`nan address that shows up after a moment"
 "Thank you for trying Cloudflare Tunnel." | Set-Content $log
-$job = Start-Job -ScriptBlock $body -ArgumentList $log, $py, "/publish.py", "https://example.test/muster/"
+$job = Start-Job -ScriptBlock $body -ArgumentList $log, $py, "/publish.py", "https://example.test/muster/", "BRIDGE_CODE=sesame-42`nOTHER=x"
 Start-Sleep -Seconds 2
 "|  https://sunny-moose-42.trycloudflare.com                    |" | Add-Content $log
 Wait-Job $job -Timeout 20 | Out-Null
@@ -59,11 +59,13 @@ if (Test-Path $openMe) { $out = $out + (Get-Content $openMe -Raw) }
 ok "pointed at the page" ($out -match "https://example\.test/muster/") ""
 ok "carrying this computer's address" ($out -match "desk=https%3A%2F%2Fsunny-moose-42") "$out"
 ok "at the chat endpoint" ($out -match "%2Fbridge%2Fchat") ""
+# The code rides along, so nobody receiving the link is asked to paste one.
+ok "and carrying the access code" ($out -match "code=sesame-42") "$out"
 
 Write-Host "`na log that never gets an address"
 Remove-Item $seen -ErrorAction SilentlyContinue
 "no address here" | Set-Content $log
-$job = Start-Job -ScriptBlock $body -ArgumentList $log, $py, "/publish.py", "https://example.test/muster/"
+$job = Start-Job -ScriptBlock $body -ArgumentList $log, $py, "/publish.py", "https://example.test/muster/", "BRIDGE_CODE=sesame-42`nOTHER=x"
 Start-Sleep -Seconds 4
 Stop-Job $job; Remove-Job $job -Force
 ok "it publishes nothing" (-not (Test-Path $seen)) "it published something anyway"

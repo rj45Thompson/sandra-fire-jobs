@@ -101,8 +101,8 @@ if (-not $page) { $page = "https://rj45thompson.github.io/starfighter/muster/ind
 $publish = Join-Path $root "link\publish_address.py"
 $watcher = $null
 if (Test-Path $publish) {
-    $watcher = Start-Job -ArgumentList $log, $py, $publish, $page -ScriptBlock {
-        param($log, $py, $publish, $page)
+    $watcher = Start-Job -ArgumentList $log, $py, $publish, $page, $envText -ScriptBlock {
+        param($log, $py, $publish, $page, $envText)
         $seen = ""
         foreach ($i in 1..120) {
             Start-Sleep -Seconds 1
@@ -114,6 +114,12 @@ if (Test-Path $publish) {
             if ($addr -eq $seen) { continue }
             $seen = $addr
             $link = "$page#desk=" + [uri]::EscapeDataString("$addr/bridge/chat")
+            # The code travels in the link too, so nobody is asked to paste one.
+            $codeLine = ($envText -split "`n" | Where-Object { $_ -match "^\s*BRIDGE_CODE\s*=" }) | Select-Object -First 1
+            if ($codeLine) {
+                $code = ($codeLine -split "=", 2)[1].Trim().Trim('"').Trim("'")
+                if ($code) { $link = $link + "&code=" + [uri]::EscapeDataString($code) }
+            }
 
             # Write-Host inside a background job never reaches this console, so
             # the link goes somewhere it can actually be found: on disk beside
