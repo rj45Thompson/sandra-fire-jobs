@@ -17,7 +17,7 @@
 (() => {
   const FILLED = "aa-filled";
   let lastFill = [];          // for undo
-  let waiting = null;         // MutationObserver, while a sign-in is in progress
+  let watcher = null;         // watches for fields that arrive after load
 
   /* ---------- writing a value the way a keystroke would ---------- */
 
@@ -136,7 +136,9 @@
   function run(profile, opts = {}) {
     const found = ApplyFields.scan();
     const report = { filled: 0, skipped: 0, fields: [], wall: ApplyFields.authWall().wall };
-    lastFill = [];
+    // A multi-step application fills across several passes; undo should still
+    // reach back over all of them rather than only the most recent step.
+    if (!opts.append) lastFill = [];
 
     for (const { el, key, kind } of found) {
       if (kind === "file") {
@@ -169,6 +171,7 @@
       if (before === null) { report.skipped++; continue; }
 
       lastFill.push({ el, before, type: el.type, name: el.name });
+      seen.add(el);
       el.classList.add(FILLED);
       report.filled++;
       report.fields.push(key);
@@ -196,48 +199,102 @@
     lastFill = [];
   }
 
-  /* ---------- signing in ----------
+  /* ---------- staying with the form ----------
    *
-   * Plenty of applications sit behind a login, and LinkedIn and Workday put one
-   * in front of almost everything. The extension does not try to get through
-   * it. It has no credentials, wants none, and a tool that collects them is a
-   * tool nobody should install.
+   * Pressing Fill once should be enough for one application. Three things
+   * otherwise make it not enough, and they are the same problem wearing
+   * different hats: the fields are not on the page yet.
    *
-   * So the handoff is: the person signs in themselves, in their own browser,
-   * exactly as they would anyway. We watch for the wall to come down and pick
-   * the work back up. Waiting is a feature — it is the difference between
-   * automating someone's application and holding their password. */
+   *   1. A login is in the way. The extension does not try to get through it —
+   *      it has no credentials and wants none. The person signs in themselves,
+   *      exactly as they would anyway, and we pick the work back up. Waiting is
+   *      the feature: it is the difference between automating an application
+   *      and holding someone's password.
+   *   2. The form has not hydrated. Greenhouse and Workday render an empty
+   *      shell first, so a Fill pressed a second too early finds nothing at all.
+   *   3. The application has more than one step. Workday's "Next" swaps the
+   *      whole form for new fields that also want filling.
+   *
+   * So one observer handles all three: watch, settle, scan, fill what is new
+   * and still empty. Nothing already typed is touched, because run() skips a
+   * field that has a value unless explicitly told otherwise.
+   */
 
-  const WAIT_LIMIT = 10 * 60 * 1000;
+  const LOGIN_LIMIT = 10 * 60 * 1000;   // people go and find their password
+  const HYDRATE_LIMIT = 45 * 1000;      // a form that never appears, will not
+  const FOLLOW_LIMIT = 10 * 60 * 1000;  // later steps of the same application
+  const SETTLE = 600;                   // let a re-render finish before looking
 
-  function stopWaiting() {
-    if (waiting) { waiting.disconnect(); waiting = null; }
+  const seen = new WeakSet();           // elements we have already filled
+
+  function stopWatching() {
+    if (watcher) {
+      watcher.observer.disconnect();
+      clearTimeout(watcher.timer);
+      clearTimeout(watcher.deadline);
+      watcher = null;
+    }
   }
 
-  function waitForLogin(profile, opts) {
-    stopWaiting();
-    const started = Date.now();
-    let timer = null;
+  /** Watch the page and fill whatever turns up.
+   *  mode: "login" | "hydrate" | "follow" — differs only in how long we wait
+   *  and what the banner says when it finally works. */
+  function watch(profile, opts, mode) {
+    stopWatching();
+    const limit = mode === "login" ? LOGIN_LIMIT
+                : mode === "hydrate" ? HYDRATE_LIMIT
+                : FOLLOW_LIMIT;
 
     const attempt = () => {
-      timer = null;
-      if (Date.now() - started > WAIT_LIMIT) { stopWaiting(); return; }
-      if (ApplyFields.authWall().wall) return;      // still signing in
-      const found = ApplyFields.scan();
-      if (!found.length) return;                    // through, but no form yet
-      stopWaiting();
-      const report = run(profile, opts);
-      report.resumed = true;
+      if (!watcher) return;
+      watcher.timer = null;
+
+      // Still behind the login: nothing to do but keep waiting.
+      if (mode === "login" && ApplyFields.authWall().wall) return;
+
+      const fresh = ApplyFields.scan().filter(
+        (f) => !seen.has(f.el) && (f.kind === "file" || !f.el.value));
+      if (!fresh.length) return;
+
+      const report = run(profile, Object.assign({}, opts, { append: true }));
+      if (!report.filled) return;
+      report.resumed = mode === "login";
+      report.followed = mode === "follow";
       banner(report);
+
+      // A login only comes down once; later steps can keep coming.
+      if (mode !== "follow") { stopWatching(); watch(profile, opts, "follow"); }
     };
 
-    waiting = new MutationObserver(() => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(attempt, 600);             // let the page settle first
-    });
-    waiting.observe(document.documentElement, { childList: true, subtree: true });
-    setTimeout(stopWaiting, WAIT_LIMIT);
+    const ping = () => {
+      if (!watcher) return;
+      clearTimeout(watcher.timer);
+      watcher.timer = setTimeout(attempt, SETTLE);
+    };
+
+    const observer = new MutationObserver(ping);
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    watcher = { observer, timer: null, ping,
+                deadline: setTimeout(stopWatching, limit) };
   }
+
+  /* A single-page application can change route without touching much of the
+   * DOM first, so the observer may not fire until after the new step renders.
+   * Nudging it on a navigation makes the next step feel immediate rather than
+   * arriving a beat late. */
+  function watchRouteChanges() {
+    const nudge = () => { if (watcher) watcher.ping(); };
+    for (const name of ["pushState", "replaceState"]) {
+      const original = history[name];
+      history[name] = function (...args) {
+        const out = original.apply(this, args);
+        nudge();
+        return out;
+      };
+    }
+    window.addEventListener("popstate", nudge);
+  }
+  watchRouteChanges();
 
   /* ---------- the little banner ---------- */
 
@@ -253,8 +310,11 @@
     } else if (report.filled === 0) {
       msg = "Nothing matched on this page.";
     } else {
-      msg = `${report.resumed ? "Signed in — filled" : "Filled"} ${report.filled} `
-          + `field${report.filled === 1 ? "" : "s"}. Check them, then submit yourself.`;
+      const lead = report.resumed ? "Signed in — filled"
+                 : report.followed ? "New step — filled"
+                 : "Filled";
+      msg = `${lead} ${report.filled} field${report.filled === 1 ? "" : "s"}. `
+          + "Check them, then submit yourself.";
       if (report.wall) msg += " There is still a sign-in on this page.";
     }
 
@@ -288,9 +348,15 @@
       banner(report);
       // Nothing to fill because there is a login in the way: wait it out rather
       // than making the person come back and press the button again.
+      const opts = { overwrite: msg.overwrite };
       if (report.filled === 0 && report.wall) {
-        waitForLogin(msg.profile, { overwrite: msg.overwrite });
+        watch(msg.profile, opts, "login");        // they sign in, we resume
         report.waiting = true;
+      } else if (report.filled === 0) {
+        watch(msg.profile, opts, "hydrate");      // the form is still rendering
+        report.waiting = true;
+      } else {
+        watch(msg.profile, opts, "follow");       // later steps of this form
       }
       respond(report);
     } else if (msg.type === "AA_SCAN") {
@@ -298,7 +364,7 @@
       respond({ count: found.length, keys: [...new Set(found.map((f) => f.key))],
                 wall: ApplyFields.authWall().wall });
     } else if (msg.type === "AA_UNDO") {
-      stopWaiting();
+      stopWatching();
       undo();
       respond({ ok: true });
     }
