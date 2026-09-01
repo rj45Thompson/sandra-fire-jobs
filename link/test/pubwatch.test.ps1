@@ -29,18 +29,20 @@ $launcher = @((Join-Path $link "bridge_up.ps1"),
             Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $launcher) { throw "cannot find bridge_up.ps1 from $PSScriptRoot" }
 $src = Get-Content $launcher -Raw
-$m = [regex]::Match($src, '(?s)\$watcher = Start-Job -ArgumentList \$log, \$py, \$publish -ScriptBlock \{\s*(.*?)\n    \}\n\}')
+$m = [regex]::Match($src, '(?s)\$watcher = Start-Job -ArgumentList [^-]*-ScriptBlock \{\s*(.*?)\n    \}\n\}')
 ok "found the watcher in the launcher" $m.Success ""
 if (-not $m.Success) { exit 1 }
 $body = [scriptblock]::Create($m.Groups[1].Value)
 
 Write-Host "`nan address that shows up after a moment"
 "Thank you for trying Cloudflare Tunnel." | Set-Content $log
-$job = Start-Job -ScriptBlock $body -ArgumentList $log, $py, "/publish.py"
+$job = Start-Job -ScriptBlock $body -ArgumentList $log, $py, "/publish.py", "https://example.test/muster/"
 Start-Sleep -Seconds 2
 "|  https://sunny-moose-42.trycloudflare.com                    |" | Add-Content $log
 Wait-Job $job -Timeout 20 | Out-Null
-Receive-Job $job | Out-Null; Remove-Job $job -Force
+$out = (Receive-Job $job -ErrorAction SilentlyContinue *>&1 | Out-String)
+$openMe = Join-Path $tmp "open-me.txt"
+Remove-Job $job -Force
 
 ok "it called the publisher" (Test-Path $seen) "nothing was recorded"
 $calls = if (Test-Path $seen) { @(Get-Content $seen) } else { @() }
@@ -48,10 +50,20 @@ ok "exactly once" ($calls.Count -eq 1) "got $($calls.Count)"
 ok "with the address it found" ($calls -join "") -match "https://sunny-moose-42\.trycloudflare\.com" "got '$($calls -join '')'"
 ok "and the script path" ($calls -join "") -match "/publish\.py" ""
 
+Write-Host "`nthe link it prints"
+# The published address needs a token set up first. The printed link needs
+# nothing, so it is the path that has to work every time.
+ok "it announces a link" ($out -match "OPEN THIS") "$out"
+ok "it leaves the link on disk" (Test-Path $openMe) "no open-me.txt written"
+if (Test-Path $openMe) { $out = $out + (Get-Content $openMe -Raw) }
+ok "pointed at the page" ($out -match "https://example\.test/muster/") ""
+ok "carrying this computer's address" ($out -match "desk=https%3A%2F%2Fsunny-moose-42") "$out"
+ok "at the chat endpoint" ($out -match "%2Fbridge%2Fchat") ""
+
 Write-Host "`na log that never gets an address"
 Remove-Item $seen -ErrorAction SilentlyContinue
 "no address here" | Set-Content $log
-$job = Start-Job -ScriptBlock $body -ArgumentList $log, $py, "/publish.py"
+$job = Start-Job -ScriptBlock $body -ArgumentList $log, $py, "/publish.py", "https://example.test/muster/"
 Start-Sleep -Seconds 4
 Stop-Job $job; Remove-Job $job -Force
 ok "it publishes nothing" (-not (Test-Path $seen)) "it published something anyway"
