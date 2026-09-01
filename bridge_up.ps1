@@ -50,12 +50,34 @@ if ($health.chat -ne "claude-cli") {
 
 $cf = (Get-Command cloudflared -ErrorAction SilentlyContinue).Source
 if (-not $cf) {
-    Write-Host ""
-    Write-Host "cloudflared is not installed, so there is no tunnel yet." -ForegroundColor Yellow
-    Write-Host "Install it once with:  winget install --id Cloudflare.cloudflared"
-    Write-Host "The engine is running locally in the meantime. Ctrl-C to stop."
-    Wait-Process -Id $engine.Id
-    exit 0
+    Write-Host "cloudflared is not here yet - installing it..." -ForegroundColor Cyan
+    $winget = (Get-Command winget -ErrorAction SilentlyContinue).Source
+    if ($winget) {
+        & $winget install --id Cloudflare.cloudflared -e --accept-source-agreements --accept-package-agreements
+        # winget does not refresh this process's PATH, so look again properly.
+        $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+                    [Environment]::GetEnvironmentVariable("Path", "User")
+        $cf = (Get-Command cloudflared -ErrorAction SilentlyContinue).Source
+    }
+    if (-not $cf) {
+        # No winget, or it failed. Fetch the single binary instead - it needs
+        # no installer and no admin rights.
+        try {
+            $dest = Join-Path $root "cloudflared.exe"
+            Write-Host "Downloading cloudflared..." -ForegroundColor Cyan
+            Invoke-WebRequest -UseBasicParsing -OutFile $dest `
+              "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+            $cf = $dest
+        } catch {
+            Write-Host ""
+            Write-Host "Could not install cloudflared automatically: $_" -ForegroundColor Yellow
+            Write-Host "Install it by hand:  winget install --id Cloudflare.cloudflared"
+            Write-Host "The engine is running locally in the meantime. Ctrl-C to stop."
+            Wait-Process -Id $engine.Id
+            exit 0
+        }
+    }
+    Write-Host "cloudflared ready." -ForegroundColor Green
 }
 
 Write-Host "Opening the tunnel..." -ForegroundColor Cyan
@@ -64,9 +86,18 @@ Write-Host "Watch for a line like  https://something.trycloudflare.com" -Foregro
 Write-Host "Send that address back and the public page starts using this computer." -ForegroundColor Cyan
 Write-Host ""
 
+$log = Join-Path $root "tunnel.log"
 try {
-    & $cf tunnel --url "http://127.0.0.1:$port"
+    # Tee it, so the address can be pulled back out and shown on its own.
+    & $cf tunnel --url "http://127.0.0.1:$port" --no-autoupdate 2>&1 | Tee-Object -FilePath $log
 } finally {
+    $addr = (Select-String -Path $log -Pattern "https://[a-z0-9-]+\.trycloudflare\.com" `
+             -ErrorAction SilentlyContinue | Select-Object -First 1).Matches.Value
+    if ($addr) {
+        Write-Host ""
+        Write-Host "  THE ADDRESS TO SEND BACK:  $addr" -ForegroundColor Green
+        Write-Host ""
+    }
     Write-Host "Stopping the engine." -ForegroundColor Cyan
     if (-not $engine.HasExited) { $engine.Kill() }
 }
