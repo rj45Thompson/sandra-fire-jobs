@@ -2172,8 +2172,13 @@ def _chat_claude_cli(system: str, history: list, message: str) -> str:
     try:
         # The message goes in on STDIN, not argv. A multi-line prompt passed
         # as an argument gets mangled and the model never sees the question.
+        # 4. ASK FOR THE MODEL. Without --model the CLI answers on whatever
+        #    its default happens to be, which is not Opus. This provider ran
+        #    that way from the day it was written, which is the whole reason
+        #    the replies read as weaker than the same account gives elsewhere.
         proc = subprocess.run(
             [exe, "-p", "--system-prompt-file", sys_file,
+             "--model", ENV.get("CLAUDE_MODEL", "opus"),
              "--output-format", "text"],
             input=user, capture_output=True, text=True, timeout=240,
             cwd=str(neutral), encoding="utf-8", errors="replace")
@@ -2251,7 +2256,9 @@ def main() -> None:
    Auth     {"token required" if tokset else "OPEN - set API_TOKEN in .env"}
    Devices  {pin_line}
    Gmail    {"app password loaded" if ENV.get("GMAIL_APP_PASSWORD") else "not configured"}
-   Chat     {ENV.get("CHAT_PROVIDER", "ollama")}
+   Chat     {ENV.get("CHAT_PROVIDER", "ollama")}{
+       " / " + ENV.get("CLAUDE_MODEL", "opus")
+       if ENV.get("CHAT_PROVIDER", "").lower() == "claude-cli" else ""}
 
    Front-end: open docs/index.html, or the GitHub Pages site,
    then click Connect and paste the API token.
