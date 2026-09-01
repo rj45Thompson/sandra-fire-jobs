@@ -17,6 +17,7 @@
 (() => {
   const FILLED = "aa-filled";
   let lastFill = [];          // for undo
+  let waiting = null;         // MutationObserver, while a sign-in is in progress
 
   /* ---------- writing a value the way a keystroke would ---------- */
 
@@ -134,7 +135,7 @@
 
   function run(profile, opts = {}) {
     const found = ApplyFields.scan();
-    const report = { filled: 0, skipped: 0, fields: [] };
+    const report = { filled: 0, skipped: 0, fields: [], wall: ApplyFields.authWall().wall };
     lastFill = [];
 
     for (const { el, key, kind } of found) {
@@ -195,6 +196,49 @@
     lastFill = [];
   }
 
+  /* ---------- signing in ----------
+   *
+   * Plenty of applications sit behind a login, and LinkedIn and Workday put one
+   * in front of almost everything. The extension does not try to get through
+   * it. It has no credentials, wants none, and a tool that collects them is a
+   * tool nobody should install.
+   *
+   * So the handoff is: the person signs in themselves, in their own browser,
+   * exactly as they would anyway. We watch for the wall to come down and pick
+   * the work back up. Waiting is a feature — it is the difference between
+   * automating someone's application and holding their password. */
+
+  const WAIT_LIMIT = 10 * 60 * 1000;
+
+  function stopWaiting() {
+    if (waiting) { waiting.disconnect(); waiting = null; }
+  }
+
+  function waitForLogin(profile, opts) {
+    stopWaiting();
+    const started = Date.now();
+    let timer = null;
+
+    const attempt = () => {
+      timer = null;
+      if (Date.now() - started > WAIT_LIMIT) { stopWaiting(); return; }
+      if (ApplyFields.authWall().wall) return;      // still signing in
+      const found = ApplyFields.scan();
+      if (!found.length) return;                    // through, but no form yet
+      stopWaiting();
+      const report = run(profile, opts);
+      report.resumed = true;
+      banner(report);
+    };
+
+    waiting = new MutationObserver(() => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(attempt, 600);             // let the page settle first
+    });
+    waiting.observe(document.documentElement, { childList: true, subtree: true });
+    setTimeout(stopWaiting, WAIT_LIMIT);
+  }
+
   /* ---------- the little banner ---------- */
 
   function banner(report) {
@@ -202,13 +246,21 @@
     const b = document.createElement("div");
     b.id = "aa-banner";
 
-    const msg = report.filled === 0
-      ? "Nothing matched on this page."
-      : `Filled ${report.filled} field${report.filled === 1 ? "" : "s"}.`;
+    let msg;
+    if (report.filled === 0 && report.wall) {
+      msg = "Sign in yourself and I will carry on. Apply Assist never sees your "
+          + "password — it is waiting, not watching.";
+    } else if (report.filled === 0) {
+      msg = "Nothing matched on this page.";
+    } else {
+      msg = `${report.resumed ? "Signed in — filled" : "Filled"} ${report.filled} `
+          + `field${report.filled === 1 ? "" : "s"}. Check them, then submit yourself.`;
+      if (report.wall) msg += " There is still a sign-in on this page.";
+    }
 
     const text = document.createElement("span");
     text.className = "aa-msg";
-    text.textContent = msg + (report.filled ? " Check them, then submit yourself." : "");
+    text.textContent = msg;
 
     const undoBtn = document.createElement("button");
     undoBtn.className = "aa-btn";
@@ -234,11 +286,19 @@
     if (msg.type === "AA_FILL") {
       const report = run(msg.profile, { overwrite: msg.overwrite });
       banner(report);
+      // Nothing to fill because there is a login in the way: wait it out rather
+      // than making the person come back and press the button again.
+      if (report.filled === 0 && report.wall) {
+        waitForLogin(msg.profile, { overwrite: msg.overwrite });
+        report.waiting = true;
+      }
       respond(report);
     } else if (msg.type === "AA_SCAN") {
       const found = ApplyFields.scan();
-      respond({ count: found.length, keys: [...new Set(found.map((f) => f.key))] });
+      respond({ count: found.length, keys: [...new Set(found.map((f) => f.key))],
+                wall: ApplyFields.authWall().wall });
     } else if (msg.type === "AA_UNDO") {
+      stopWaiting();
       undo();
       respond({ ok: true });
     }

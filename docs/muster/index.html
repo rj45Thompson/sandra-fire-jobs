@@ -40,7 +40,6 @@
   --moss:#6FBFA6; --moss-soft:#122A24;
   --amber:#D6A544; --amber-soft:#2E2412;
 }
-*{box-sizing:border-box}
 *,*::before,*::after{box-sizing:border-box}
 img{max-width:100%}
 [hidden]{display:none!important}
@@ -495,12 +494,28 @@ function renderConnect(w) {
   c2.append(p2, pre, cb);
   w.append(c2);
 
+  const cL = document.createElement("div"); cL.className = "card";
+  cL.innerHTML = '<p class="eyebrow">Step 3 — signing in</p>';
+  const pL = document.createElement("p");
+  pL.textContent = "Most applications sit behind a login, and LinkedIn and Workday put one in front "
+    + "of almost everything. The extension does not try to get through it and holds no credentials. "
+    + "You sign in yourself, in your own browser, exactly as you would anyway.";
+  const pL2 = document.createElement("p");
+  pL2.style.marginTop = "8px";
+  pL2.textContent = "Press Fill at a sign-in wall and it tells you so, then waits. The moment you are "
+    + "through it fills the application on its own — you do not have to come back and press it again. "
+    + "It will not type into a login box even when the field is labelled Email, which is the one "
+    + "mistake that would actually matter.";
+  cL.append(pL, pL2);
+  w.append(cL);
+
   const c3 = document.createElement("div"); c3.className = "card";
   c3.innerHTML = '<p class="eyebrow">What the extension will and will not do</p>';
   const p3 = document.createElement("p");
-  p3.textContent = "It fills forms and attaches your resume in your own browser session. It never asks for "
-    + "a password, never submits an application for you, and refuses to touch passwords, payment details, "
-    + "SIN or SSN, or any equal-opportunity question. Those are yours to answer deliberately.";
+  p3.textContent = "It fills forms and attaches your resume in your own browser session. It never asks "
+    + "for a password, never submits an application for you, and refuses to touch passwords, payment "
+    + "details, SIN or SSN, or any equal-opportunity question. Those are yours to answer deliberately. "
+    + "Nothing it reads leaves your machine.";
   c3.append(p3);
   w.append(c3);
 }

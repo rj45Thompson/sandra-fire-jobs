@@ -171,6 +171,86 @@ const ApplyFields = (() => {
     /sexual\s*orientation/, /date\s*of\s*birth/, /\bdob\b/
   ];
 
+  /* ---------- sign-in walls ----------
+   *
+   * The single most damaging thing this extension could do is type the
+   * applicant's email into a login box. It looks like a win — the field is
+   * called "email", the rule matches — and it is actually the extension
+   * filling out someone's credentials form for them. So a field inside
+   * anything that smells like authentication is skipped outright, whatever it
+   * scores.
+   *
+   * The product answer to a login wall is not to get past it. It is to stop,
+   * let the person sign in themselves with credentials this code never sees,
+   * and carry on afterwards. That is why there is no "username" rule anywhere
+   * above and never will be. */
+
+  const AUTH_AUTO = new Set([
+    "username", "current-password", "new-password", "one-time-code"
+  ]);
+
+  const AUTH_WORDS = new RegExp([
+    "sign\\s*in", "sign\\s*on", "log\\s*in", "logon", "sign\\s*up",
+    "\\bregister\\b", "create\\s+(an\\s+)?account", "forgot\\s+your",
+    "reset\\s+password", "verification\\s+code", "two[-\\s]?factor"
+  ].join("|"), "i");
+
+  const isVisible = (el) => {
+    if (!el) return false;
+    if (el.hidden || el.type === "hidden") return false;
+    const r = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+    if (r && r.width === 0 && r.height === 0) return false;
+    return true;
+  };
+
+  /** The form (or login-ish container) an input belongs to, if any. */
+  function authScope(el) {
+    if (!el.closest) return null;
+    return el.closest("form")
+        || el.closest('[class*="login"],[class*="signin"],[class*="sign-in"],'
+                    + '[id*="login"],[id*="signin"],[id*="sign-in"]')
+        || null;
+  }
+
+  /** Just the form's own chrome — heading, legend, submit button, aria-label.
+   * Deliberately not every label inside it: an application form mentioning the
+   * word "account" somewhere should not be mistaken for a login. */
+  function scopeChrome(scope) {
+    const bits = [];
+    if (scope.getAttribute && scope.getAttribute("aria-label")) {
+      bits.push(scope.getAttribute("aria-label"));
+    }
+    scope.querySelectorAll("legend, h1, h2, h3, h4").forEach((n) => bits.push(n.textContent));
+    scope.querySelectorAll('button, input[type="submit"], [role="button"]').forEach((n) => {
+      bits.push(n.textContent || n.value || "");
+    });
+    return bits.join(" ");
+  }
+
+  /** True when this input is part of signing in, registering, or 2FA. */
+  function isAuthField(el) {
+    const auto = (el.getAttribute("autocomplete") || "")
+      .toLowerCase().trim().split(/\s+/).pop();
+    if (AUTH_AUTO.has(auto)) return true;
+    if (el.type === "password") return true;
+
+    const scope = authScope(el);
+    if (!scope) return false;
+    if (scope.querySelector('input[type="password"]')) return true;
+    return AUTH_WORDS.test(scopeChrome(scope));
+  }
+
+  /** Is the page currently asking the person to authenticate?
+   * Used to explain a fill that found nothing, and to know when to try again. */
+  function authWall(root = document) {
+    const pw = [...root.querySelectorAll('input[type="password"]')].filter(isVisible);
+    if (pw.length) return { wall: true, reason: "password" };
+    const otp = [...root.querySelectorAll('input[autocomplete="one-time-code"]')]
+      .filter(isVisible);
+    if (otp.length) return { wall: true, reason: "code" };
+    return { wall: false, reason: "" };
+  }
+
   /* Underscores and hyphens separate words in `name` and `id` attributes but
    * count as word characters to a regex, so `\blast\s*name\b` misses
    * `last_name` and `\bphone\b` misses `phone_number`. Flatten them first. */
@@ -236,6 +316,7 @@ const ApplyFields = (() => {
     const sig = signature(el);
     if (!sig) return null;
     if (NEVER.some((r) => r.test(sig))) return null;
+    if (isAuthField(el)) return null;
 
     /* NOT norm() — autocomplete is a controlled vocabulary whose tokens
      * contain hyphens ("given-name"), so flattening them would turn every
@@ -260,6 +341,7 @@ const ApplyFields = (() => {
     const sig = signature(el);
     if (!sig) return null;
     if (NEVER.some((r) => r.test(sig))) return null;
+    if (isAuthField(el)) return null;
 
     let best = null, bestScore = 0;
     for (const rule of FILE_RULES) {
@@ -285,7 +367,8 @@ const ApplyFields = (() => {
     return out;
   }
 
-  return { classify, classifyFile, scan, signature, RULES, FILE_RULES, NEVER, MIN_SCORE };
+  return { classify, classifyFile, scan, signature, isAuthField, authWall,
+           RULES, FILE_RULES, NEVER, MIN_SCORE };
 })();
 
 if (typeof module !== "undefined") module.exports = ApplyFields;

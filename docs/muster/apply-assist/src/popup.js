@@ -49,8 +49,14 @@ async function init() {
   try {
     const res = await askPage();
     if (!res || !res.count) {
-      $("#scan").textContent = "No application fields found on this page.";
-      $("#scan").className = "scan none";
+      // A login in the way is a different situation from an empty page, and
+      // telling them apart is the difference between "this is broken" and
+      // "sign in and I will take it from there".
+      $("#scan").textContent = res && res.wall
+        ? "Sign in to this site first. Press Fill and I will wait, then finish the form."
+        : "No application fields found on this page.";
+      $("#scan").className = res && res.wall ? "scan" : "scan none";
+      if (res && res.wall) $("#fill").disabled = filled === 0;
       return;
     }
     $("#scan").textContent =
@@ -76,8 +82,9 @@ $("#fill").addEventListener("click", async () => {
     });
     btn.textContent = report.filled
       ? `Filled ${report.filled} — check the page`
+      : report.waiting ? "Waiting for you to sign in"
       : "Nothing matched";
-    setTimeout(() => window.close(), 1100);
+    setTimeout(() => window.close(), report.waiting ? 1800 : 1100);
   } catch (e) {
     btn.textContent = "Fill this page";
     btn.disabled = false;
