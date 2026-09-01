@@ -2,7 +2,9 @@
 #
 #   powershell -ExecutionPolicy Bypass -File bridge_up.ps1
 #
-# Starts the engine, opens a tunnel to it, and prints the address to send back.
+# Starts the engine, opens a tunnel to it, and publishes the address to the
+# public page itself. Nothing to copy, nothing to send back: open the page and
+# it connects. Close this window and it goes back to saying the desk is down.
 # No API key anywhere: the model runs through the Claude Code CLI already
 # signed in here, so it rides your own subscription.
 #
@@ -82,22 +84,57 @@ if (-not $cf) {
 
 Write-Host "Opening the tunnel..." -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Watch for a line like  https://something.trycloudflare.com" -ForegroundColor Cyan
-Write-Host "Send that address back and the public page starts using this computer." -ForegroundColor Cyan
+Write-Host "The address publishes itself to the page - nothing to copy." -ForegroundColor Cyan
+Write-Host "Give GitHub Pages half a minute, then the public page is live on this computer." -ForegroundColor Cyan
 Write-Host ""
 
 $log = Join-Path $root "tunnel.log"
+if (Test-Path $log) { Remove-Item $log -Force }      # or we publish the last run's address
+
+# The address changes every time a quick tunnel starts, which is why it kept
+# having to be carried by hand. Watch for it and write it into relay.json on
+# the site instead; the page re-reads that file on a timer and connects itself.
+$publish = Join-Path $root "link\publish_address.py"
+$watcher = $null
+if (Test-Path $publish) {
+    $watcher = Start-Job -ArgumentList $log, $py, $publish -ScriptBlock {
+        param($log, $py, $publish)
+        $seen = ""
+        foreach ($i in 1..120) {
+            Start-Sleep -Seconds 1
+            if (-not (Test-Path $log)) { continue }
+            $hit = Select-String -Path $log -Pattern "https://[a-z0-9-]+\.trycloudflare\.com" |
+                   Select-Object -First 1
+            if (-not $hit) { continue }
+            $addr = $hit.Matches.Value
+            if ($addr -eq $seen) { continue }
+            $seen = $addr
+            & $py $publish $addr 2>&1
+            break
+        }
+    }
+} else {
+    Write-Host "! link\publish_address.py is missing - the address will not publish itself." -ForegroundColor Yellow
+}
+
 try {
     # Tee it, so the address can be pulled back out and shown on its own.
     & $cf tunnel --url "http://127.0.0.1:$port" --no-autoupdate 2>&1 | Tee-Object -FilePath $log
 } finally {
     $addr = (Select-String -Path $log -Pattern "https://[a-z0-9-]+\.trycloudflare\.com" `
              -ErrorAction SilentlyContinue | Select-Object -First 1).Matches.Value
+    if ($watcher) {
+        Receive-Job $watcher -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+        Remove-Job $watcher -Force -ErrorAction SilentlyContinue
+    }
     if ($addr) {
         Write-Host ""
-        Write-Host "  THE ADDRESS TO SEND BACK:  $addr" -ForegroundColor Green
+        Write-Host "  This computer was reachable at:  $addr" -ForegroundColor Green
         Write-Host ""
     }
+    # Say the page is off rather than leaving it pointed at an address that is
+    # gone - otherwise it spends a minute failing before it gives up.
+    if (Test-Path $publish) { & $py $publish 2>&1 | ForEach-Object { Write-Host $_ } }
     Write-Host "Stopping the engine." -ForegroundColor Cyan
     if (-not $engine.HasExited) { $engine.Kill() }
 }

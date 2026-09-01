@@ -2252,6 +2252,11 @@ def _chat_claude_cli(system: str, history: list, message: str) -> str:
         "You are talking directly to Sandra herself. Address her as 'you'. "
         "Answer the question she actually asked, immediately, in plain prose. "
         "No greeting, no menu of options, no offer to help - just the answer."
+        + nl + nl +
+        "LENGTH. At most three short sentences. If asked to draft something, "
+        "give only the draft. No preamble, no summary of what you are about to "
+        "do, no closing question. Longer only when a full letter or a list is "
+        "asked for. When in doubt, stop sooner."
     )
     # Label the transcript unmistakably and put the live question last, or the
     # model reads the pasted history as ambient "session context" and asks what
