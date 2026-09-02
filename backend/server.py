@@ -906,25 +906,37 @@ pin.addEventListener('keydown',e=>{if(e.key==='Enter')submit();});
     def _bridge_chat(self):
         import hashlib
 
-        allowed = [o.strip() for o in
-                   ENV.get("BRIDGE_ORIGINS", "https://rj45thompson.github.io").split(",")
-                   if o.strip()]
-        origin = self.headers.get("Origin") or ""
-        if allowed and origin not in allowed:
-            return self._bridge_deny("This bridge does not serve that origin.")
-
-        want = ENV.get("BRIDGE_CODE", "")
-        if not want:
-            return self._bridge_deny(
-                "This bridge has no BRIDGE_CODE set, so it refuses to answer.", 500)
-
+        # Read the body once. _body() consumes the socket, so a second call
+        # returns nothing and every later field silently reads as missing.
         b = self._body() or {}
-        got = b.get("code")
-        got = got[:256] if isinstance(got, str) else ""
-        # Digest both sides so the comparison does the same work either way.
-        if (hashlib.sha256(got.encode()).digest()
-                != hashlib.sha256(want.encode()).digest()):
-            return self._bridge_deny("That access code was refused.")
+
+        # A request from this machine is the owner's own browser, and neither
+        # the origin list nor the access code is protecting anything from the
+        # person sitting at the keyboard. They were, though, very good at
+        # locking that person out: a page opened here has no code to send, and
+        # an origin list written before the page moved refuses it outright.
+        # Both checks stay for anything arriving over the tunnel.
+        if self._ip_kind() != "self":
+            allowed = [o.strip() for o in
+                       ENV.get("BRIDGE_ORIGINS", "https://rj45thompson.github.io").split(",")
+                       if o.strip()]
+            origin = self.headers.get("Origin") or ""
+            if allowed and origin not in allowed:
+                return self._bridge_deny(
+                    f"This bridge does not serve {origin or 'that origin'}. "
+                    "Add it to BRIDGE_ORIGINS in .env.")
+
+            want = ENV.get("BRIDGE_CODE", "")
+            if not want:
+                return self._bridge_deny(
+                    "This bridge has no BRIDGE_CODE set, so it refuses to answer.", 500)
+
+            got = b.get("code")
+            got = got[:256] if isinstance(got, str) else ""
+            # Digest both sides so the comparison does the same work either way.
+            if (hashlib.sha256(got.encode()).digest()
+                    != hashlib.sha256(want.encode()).digest()):
+                return self._bridge_deny("That access code was refused.")
 
         raw = b.get("messages")
         if not isinstance(raw, list) or not raw:
