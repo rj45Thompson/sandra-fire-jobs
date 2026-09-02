@@ -50,6 +50,46 @@ if ($health.chat -ne "claude-cli") {
     Write-Host "! Chat is on '$($health.chat)', not claude-cli. Set CHAT_PROVIDER=claude-cli in .env." -ForegroundColor Yellow
 }
 
+$page = $env:MUSTER_PAGE
+if (-not $page) { $page = "https://rj45thompson.github.io/starfighter/muster/index.html" }
+
+# ---- the chat, served by this machine ------------------------------------
+#
+# A page on github.io reaching http://127.0.0.1 is the fragile way to do this,
+# and Chrome 138+ made it worse: it holds that request, silently, until
+# somebody grants a local-network permission - so the chat reported offline
+# while this engine sat here running.
+#
+# Served by the engine itself the question never comes up. Same origin as
+# /bridge/chat: no CORS, no permission to grant, no mixed content, no access
+# code, and no address to remember or go stale. It is the one route that
+# cannot break, so it is the one that opens first, without waiting on a tunnel.
+#
+# The copy is refreshed from the published page every run, so there is still
+# only one source of truth. If that fetch fails, the copy cached last time
+# keeps working - which is the whole reason it is on disk.
+$chat = Join-Path $root "docs\muster.html"
+$saver = Join-Path $root "link\save_chat_page.ps1"
+if (Test-Path $saver) {
+    . $saver
+    $kept = Save-ChatPage -Url $page -Path $chat
+    if (-not $kept.Refreshed -and $kept.Reason) {
+        Write-Host "Could not refresh the chat page: $($kept.Reason)" -ForegroundColor Yellow
+        if ($kept.Ok) { Write-Host "Using the copy from last time." -ForegroundColor Yellow }
+    }
+} else {
+    Write-Host "! link\save_chat_page.ps1 is missing - the local chat will not refresh." -ForegroundColor Yellow
+}
+if (Test-Path $chat) {
+    $local = "http://127.0.0.1:$port/muster.html"
+    Write-Host ""
+    Write-Host "CHAT (this computer, nothing to allow): $local" -ForegroundColor Green
+    try { Start-Process $local } catch { }
+} else {
+    Write-Host "! No chat page cached yet, and it could not be fetched." -ForegroundColor Yellow
+    Write-Host "  The tunnel link below still works." -ForegroundColor Yellow
+}
+
 $cf = (Get-Command cloudflared -ErrorAction SilentlyContinue).Source
 if (-not $cf) {
     Write-Host "cloudflared is not here yet - installing it..." -ForegroundColor Cyan
@@ -96,8 +136,6 @@ if (Test-Path $log) { Remove-Item $log -Force }      # or we publish the last ru
 # The address changes every time a quick tunnel starts, which is why it kept
 # having to be carried by hand. Watch for it and write it into relay.json on
 # the site instead; the page re-reads that file on a timer and connects itself.
-$page = $env:MUSTER_PAGE
-if (-not $page) { $page = "https://rj45thompson.github.io/starfighter/muster/index.html" }
 $publish = Join-Path $root "link\publish_address.py"
 $watcher = $null
 if (Test-Path $publish) {
